@@ -1,6 +1,0 @@
-{
-  "/api/auth/callback/route": "app/api/auth/callback/route.js",
-  "/api/auth/status/route": "app/api/auth/status/route.js",
-  "/api/auth/url/route": "app/api/auth/url/route.js",
-  "/page": "app/page.js"
-}

@@ -1,3 +1,0 @@
-{"timestamp":"00:00:14.778","source":"Server","level":"LOG","message":""}
-{"timestamp":"00:00:30.034","source":"Server","level":"LOG","message":"○ Compiling /api/auth/url ..."}
-{"timestamp":"00:01:34.676","source":"Server","level":"LOG","message":"○ Compiling /api/auth/callback ..."}

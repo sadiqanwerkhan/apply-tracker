@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/sadiq/Desktop/apply-tracker/app/api/auth/status/route.ts"],"sourcesContent":["import { cookies } from \"next/headers\";\r\nimport { NextResponse } from \"next/server\";\r\n\r\nexport async function GET() {\r\n  const cookieStore = await cookies();\r\n  const tokens = cookieStore.get(\"gmail_tokens\");\r\n  return NextResponse.json({ connected: !!tokens });\r\n}"],"names":["GET","cookieStore","tokens","get","json","connected"],"mappings":";;;;AAAA;AACA;;;AAEO,eAAeA;IACpB,MAAMC,cAAc,MAAM,IAAA,4IAAO;IACjC,MAAMC,SAASD,YAAYE,GAAG,CAAC;IAC/B,OAAO,gJAAY,CAACC,IAAI,CAAC;QAAEC,WAAW,CAAC,CAACH;IAAO;AACjD"}}]
-}
