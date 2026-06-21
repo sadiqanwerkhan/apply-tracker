@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// One row per Gmail message we have classified.
+// The id (Gmail message ID) is what lets us say "seen this already"
+// and skip re-classifying it on future scans.
+model Email {
+  id         String   @id          // Gmail message ID
+  companyKey String                 // grouping key (lowercase company, or role:...)
+  company    String                 // display label
+  role       String
+  sender     String
+  isAts      Boolean
+  status     String                 // "Rejected" | "Advancing" | "Pending"
+  subject    String
+  date       DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([companyKey])
+  @@index([date])
+}

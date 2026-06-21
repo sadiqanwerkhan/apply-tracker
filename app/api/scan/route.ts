@@ -3,11 +3,24 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { classify, extractCompany, extractRole } from "@/lib/classify";
 import { aiClassifyBatch, AiStatus } from "@/lib/aiClassify";
+import { prisma } from "@/lib/prisma";
 
 const MAX_MESSAGES = 200;
-const FETCH_CHUNK = 10;   // parallel Gmail fetches
-const AI_BATCH = 12;      // emails per AI call
-const AI_DELAY_MS = 1500; // pause between AI batches (respect rate limit)
+const FETCH_CHUNK = 10;
+const AI_BATCH = 12;
+const AI_DELAY_MS = 1500;
+
+// a single email's worth of data, used for aggregation
+type Item = {
+  companyKey: string;
+  company: string;
+  role: string;
+  sender: string;
+  isAts: boolean;
+  status: AiStatus;
+  date: number; // ms
+  subject: string;
+};
 
 type Rec = {
   company: string;
@@ -22,18 +35,6 @@ type Rec = {
   lastSeen: number;
   rejectSubject: string;
   advanceSubject: string;
-  confidence: string;
-};
-
-type Parsed = {
-  company: string;
-  key: string;
-  role: string;
-  sender: string;
-  isAts: boolean;
-  date: number;
-  subject: string;
-  body: string;
 };
 
 function isoToGmail(iso: string, addDays = 0): string {
@@ -73,7 +74,6 @@ function getBodyText(payload: any): string {
   return out;
 }
 
-// keyword fallback mapped to the 3 statuses
 function keywordStatus(subject: string, body: string): AiStatus {
   const kw = classify((subject + " " + body).toLowerCase());
   if (kw === "Rejected") return "Rejected";
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 
     const query = buildQuery(startG, endG);
 
-    // 1) collect message IDs
+    // 1) collect message IDs for the range (fast — IDs only)
     let ids: string[] = [];
     let pageToken: string | undefined = undefined;
     do {
@@ -120,22 +120,29 @@ export async function GET(req: NextRequest) {
     } while (pageToken && ids.length < MAX_MESSAGES);
     ids = ids.slice(0, MAX_MESSAGES);
 
-    // 2) fetch messages in parallel chunks
+    // 2) which of these do we already have in the DB?
+    const existing = await prisma.email.findMany({ where: { id: { in: ids } } });
+    const existingIds = new Set(existing.map((e) => e.id));
+    const newIds = ids.filter((id) => !existingIds.has(id));
+    console.log(`Scan: ${ids.length} emails, ${existing.length} cached, ${newIds.length} new to classify`);
+
+    // 3) fetch bodies for NEW emails only
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const messages: any[] = [];
-    for (let i = 0; i < ids.length; i += FETCH_CHUNK) {
-      const chunk = ids.slice(i, i + FETCH_CHUNK);
+    const newMessages: any[] = [];
+    for (let i = 0; i < newIds.length; i += FETCH_CHUNK) {
+      const chunk = newIds.slice(i, i + FETCH_CHUNK);
       const got = await Promise.all(
         chunk.map((id) =>
           gmail.users.messages.get({ userId: "me", id, format: "full" }).then((r) => r.data).catch(() => null)
         )
       );
-      got.forEach((m) => { if (m) messages.push(m); });
+      got.forEach((m) => { if (m) newMessages.push(m); });
     }
 
-    // 3) parse each message into a structured item
-    const parsed: Parsed[] = [];
-    for (const msg of messages) {
+    // 4) parse new messages
+    type Parsed = Omit<Item, "status"> & { id: string; body: string };
+    const newParsed: Parsed[] = [];
+    for (const msg of newMessages) {
       const headers = msg.payload?.headers || [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const from = (headers.find((h: any) => h.name === "From") || {}).value || "";
@@ -152,51 +159,75 @@ export async function GET(req: NextRequest) {
       else continue;
 
       const body = getBodyText(msg.payload);
-      parsed.push({ company: label, key, role, sender: info.sender, isAts: info.isAts, date, subject, body });
+      newParsed.push({
+        id: msg.id, companyKey: key, company: label, role,
+        sender: info.sender, isAts: info.isAts, date, subject, body,
+      });
     }
 
-    // 4) classify with AI in batches (keyword fallback per item)
-    const statuses: AiStatus[] = [];
-    for (let i = 0; i < parsed.length; i += AI_BATCH) {
-      const batch = parsed.slice(i, i + AI_BATCH);
+    // 5) AI-classify the new ones (keyword fallback per item)
+    const newStatuses: AiStatus[] = [];
+    for (let i = 0; i < newParsed.length; i += AI_BATCH) {
+      const batch = newParsed.slice(i, i + AI_BATCH);
       const ai = await aiClassifyBatch(batch.map((p) => ({ subject: p.subject, body: p.body })));
       for (let j = 0; j < batch.length; j++) {
-        statuses.push(ai[j] ?? keywordStatus(batch[j].subject, batch[j].body));
+        newStatuses.push(ai[j] ?? keywordStatus(batch[j].subject, batch[j].body));
       }
-      if (i + AI_BATCH < parsed.length) {
+      if (i + AI_BATCH < newParsed.length) {
         await new Promise((r) => setTimeout(r, AI_DELAY_MS));
       }
     }
 
-    // 5) aggregate per company using the statuses
+    // 6) save the new classifications to the DB
+    if (newParsed.length > 0) {
+      await prisma.email.createMany({
+        data: newParsed.map((p, i) => ({
+          id: p.id, companyKey: p.companyKey, company: p.company, role: p.role,
+          sender: p.sender, isAts: p.isAts, status: newStatuses[i],
+          subject: p.subject, date: new Date(p.date),
+        })),
+      });
+    }
+
+    // 7) build the unified list (cached + newly classified) for aggregation
+    const all: Item[] = [
+      ...existing.map((e) => ({
+        companyKey: e.companyKey, company: e.company, role: e.role, sender: e.sender,
+        isAts: e.isAts, status: e.status as AiStatus, date: e.date.getTime(), subject: e.subject,
+      })),
+      ...newParsed.map((p, i) => ({
+        companyKey: p.companyKey, company: p.company, role: p.role, sender: p.sender,
+        isAts: p.isAts, status: newStatuses[i], date: p.date, subject: p.subject,
+      })),
+    ];
+
+    // 8) aggregate per company
     const byCompany: Record<string, Rec> = {};
-    parsed.forEach((p, idx) => {
-      const status = statuses[idx];
-      if (!byCompany[p.key]) {
-        byCompany[p.key] = {
-          company: p.company, role: p.role, sender: p.sender, viaAts: p.isAts,
+    for (const it of all) {
+      if (!byCompany[it.companyKey]) {
+        byCompany[it.companyKey] = {
+          company: it.company, role: it.role, sender: it.sender, viaAts: it.isAts,
           hasReject: false, lastRejectDate: null,
           hasAdvance: false, lastAdvanceDate: null,
-          firstSeen: p.date, lastSeen: p.date,
+          firstSeen: it.date, lastSeen: it.date,
           rejectSubject: "", advanceSubject: "",
-          confidence: p.isAts ? "Low" : "High",
         };
       }
-      const rec = byCompany[p.key];
-      if (!rec.role && p.role) rec.role = p.role;
-      if (p.date < rec.firstSeen) rec.firstSeen = p.date;
-      if (p.date > rec.lastSeen) rec.lastSeen = p.date;
+      const rec = byCompany[it.companyKey];
+      if (!rec.role && it.role) rec.role = it.role;
+      if (it.date < rec.firstSeen) rec.firstSeen = it.date;
+      if (it.date > rec.lastSeen) rec.lastSeen = it.date;
 
-      if (status === "Rejected") {
+      if (it.status === "Rejected") {
         rec.hasReject = true;
-        if (!rec.lastRejectDate || p.date > rec.lastRejectDate) { rec.lastRejectDate = p.date; rec.rejectSubject = p.subject; }
-      } else if (status === "Advancing") {
+        if (!rec.lastRejectDate || it.date > rec.lastRejectDate) { rec.lastRejectDate = it.date; rec.rejectSubject = it.subject; }
+      } else if (it.status === "Advancing") {
         rec.hasAdvance = true;
-        if (!rec.lastAdvanceDate || p.date > rec.lastAdvanceDate) { rec.lastAdvanceDate = p.date; rec.advanceSubject = p.subject; }
+        if (!rec.lastAdvanceDate || it.date > rec.lastAdvanceDate) { rec.lastAdvanceDate = it.date; rec.advanceSubject = it.subject; }
       }
-    });
+    }
 
-    // 6) resolve final status, build response rows
+    // 9) resolve final status, build response rows
     const rows = Object.values(byCompany).map((r) => {
       let status: string;
       if (r.hasReject && (!r.lastAdvanceDate || (r.lastRejectDate || 0) >= r.lastAdvanceDate)) status = "Rejected";
@@ -208,7 +239,7 @@ export async function GET(req: NextRequest) {
         company: r.company,
         role: r.role || "",
         status,
-        confidence: r.confidence,
+        confidence: r.viaAts ? "Low" : "High",
         sender: r.viaAts ? r.sender : "",
         firstSeen: new Date(r.firstSeen).toISOString().slice(0, 10),
         lastSeen: new Date(r.lastSeen).toISOString().slice(0, 10),
