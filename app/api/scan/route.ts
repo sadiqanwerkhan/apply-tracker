@@ -2,9 +2,12 @@ import { google } from "googleapis";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { classify, extractCompany, extractRole } from "@/lib/classify";
+import { aiClassifyBatch, AiStatus } from "@/lib/aiClassify";
 
 const MAX_MESSAGES = 200;
-const CHUNK = 10;
+const FETCH_CHUNK = 10;   // parallel Gmail fetches
+const AI_BATCH = 12;      // emails per AI call
+const AI_DELAY_MS = 1500; // pause between AI batches (respect rate limit)
 
 type Rec = {
   company: string;
@@ -20,6 +23,17 @@ type Rec = {
   rejectSubject: string;
   advanceSubject: string;
   confidence: string;
+};
+
+type Parsed = {
+  company: string;
+  key: string;
+  role: string;
+  sender: string;
+  isAts: boolean;
+  date: number;
+  subject: string;
+  body: string;
 };
 
 function isoToGmail(iso: string, addDays = 0): string {
@@ -57,6 +71,14 @@ function getBodyText(payload: any): string {
   }
   walk(payload);
   return out;
+}
+
+// keyword fallback mapped to the 3 statuses
+function keywordStatus(subject: string, body: string): AiStatus {
+  const kw = classify((subject + " " + body).toLowerCase());
+  if (kw === "Rejected") return "Rejected";
+  if (kw === "Advancing") return "Advancing";
+  return "Pending";
 }
 
 export async function GET(req: NextRequest) {
@@ -98,11 +120,11 @@ export async function GET(req: NextRequest) {
     } while (pageToken && ids.length < MAX_MESSAGES);
     ids = ids.slice(0, MAX_MESSAGES);
 
-    // 2) fetch in parallel chunks
+    // 2) fetch messages in parallel chunks
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const messages: any[] = [];
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const chunk = ids.slice(i, i + CHUNK);
+    for (let i = 0; i < ids.length; i += FETCH_CHUNK) {
+      const chunk = ids.slice(i, i + FETCH_CHUNK);
       const got = await Promise.all(
         chunk.map((id) =>
           gmail.users.messages.get({ userId: "me", id, format: "full" }).then((r) => r.data).catch(() => null)
@@ -111,8 +133,8 @@ export async function GET(req: NextRequest) {
       got.forEach((m) => { if (m) messages.push(m); });
     }
 
-    // 3) classify + aggregate
-    const byCompany: Record<string, Rec> = {};
+    // 3) parse each message into a structured item
+    const parsed: Parsed[] = [];
     for (const msg of messages) {
       const headers = msg.payload?.headers || [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -130,34 +152,51 @@ export async function GET(req: NextRequest) {
       else continue;
 
       const body = getBodyText(msg.payload);
-      const hay = (subject + " " + body).toLowerCase();
-      const result = classify(hay);
+      parsed.push({ company: label, key, role, sender: info.sender, isAts: info.isAts, date, subject, body });
+    }
 
-      if (!byCompany[key]) {
-        byCompany[key] = {
-          company: label, role, sender: info.sender, viaAts: info.isAts,
-          hasReject: false, lastRejectDate: null,
-          hasAdvance: false, lastAdvanceDate: null,
-          firstSeen: date, lastSeen: date,
-          rejectSubject: "", advanceSubject: "",
-          confidence: info.isAts ? "Low" : "High",
-        };
+    // 4) classify with AI in batches (keyword fallback per item)
+    const statuses: AiStatus[] = [];
+    for (let i = 0; i < parsed.length; i += AI_BATCH) {
+      const batch = parsed.slice(i, i + AI_BATCH);
+      const ai = await aiClassifyBatch(batch.map((p) => ({ subject: p.subject, body: p.body })));
+      for (let j = 0; j < batch.length; j++) {
+        statuses.push(ai[j] ?? keywordStatus(batch[j].subject, batch[j].body));
       }
-      const rec = byCompany[key];
-      if (!rec.role && role) rec.role = role;
-      if (date < rec.firstSeen) rec.firstSeen = date;
-      if (date > rec.lastSeen) rec.lastSeen = date;
-
-      if (result === "Rejected") {
-        rec.hasReject = true;
-        if (!rec.lastRejectDate || date > rec.lastRejectDate) { rec.lastRejectDate = date; rec.rejectSubject = subject; }
-      } else if (result === "Advancing") {
-        rec.hasAdvance = true;
-        if (!rec.lastAdvanceDate || date > rec.lastAdvanceDate) { rec.lastAdvanceDate = date; rec.advanceSubject = subject; }
+      if (i + AI_BATCH < parsed.length) {
+        await new Promise((r) => setTimeout(r, AI_DELAY_MS));
       }
     }
 
-    // 4) resolve final status, build response rows
+    // 5) aggregate per company using the statuses
+    const byCompany: Record<string, Rec> = {};
+    parsed.forEach((p, idx) => {
+      const status = statuses[idx];
+      if (!byCompany[p.key]) {
+        byCompany[p.key] = {
+          company: p.company, role: p.role, sender: p.sender, viaAts: p.isAts,
+          hasReject: false, lastRejectDate: null,
+          hasAdvance: false, lastAdvanceDate: null,
+          firstSeen: p.date, lastSeen: p.date,
+          rejectSubject: "", advanceSubject: "",
+          confidence: p.isAts ? "Low" : "High",
+        };
+      }
+      const rec = byCompany[p.key];
+      if (!rec.role && p.role) rec.role = p.role;
+      if (p.date < rec.firstSeen) rec.firstSeen = p.date;
+      if (p.date > rec.lastSeen) rec.lastSeen = p.date;
+
+      if (status === "Rejected") {
+        rec.hasReject = true;
+        if (!rec.lastRejectDate || p.date > rec.lastRejectDate) { rec.lastRejectDate = p.date; rec.rejectSubject = p.subject; }
+      } else if (status === "Advancing") {
+        rec.hasAdvance = true;
+        if (!rec.lastAdvanceDate || p.date > rec.lastAdvanceDate) { rec.lastAdvanceDate = p.date; rec.advanceSubject = p.subject; }
+      }
+    });
+
+    // 6) resolve final status, build response rows
     const rows = Object.values(byCompany).map((r) => {
       let status: string;
       if (r.hasReject && (!r.lastAdvanceDate || (r.lastRejectDate || 0) >= r.lastAdvanceDate)) status = "Rejected";
