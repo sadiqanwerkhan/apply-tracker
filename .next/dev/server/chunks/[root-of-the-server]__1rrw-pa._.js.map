@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 136, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/sadiq/Desktop/apply-tracker/app/api/auth/url/route.ts"],"sourcesContent":["import { google } from \"googleapis\";\r\nimport { NextResponse } from \"next/server\";\r\n\r\nconst SCOPES = [\"https://www.googleapis.com/auth/gmail.readonly\"];\r\n\r\nexport async function GET() {\r\n  const oauth2Client = new google.auth.OAuth2(\r\n    process.env.GOOGLE_CLIENT_ID,\r\n    process.env.GOOGLE_CLIENT_SECRET,\r\n    process.env.GOOGLE_REDIRECT_URI\r\n  );\r\n\r\n  const url = oauth2Client.generateAuthUrl({\r\n    access_type: \"offline\",\r\n    prompt: \"consent\",\r\n    scope: SCOPES,\r\n  });\r\n\r\n  return NextResponse.json({ url });\r\n}"],"names":["SCOPES","GET","oauth2Client","auth","OAuth2","process","env","GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REDIRECT_URI","url","generateAuthUrl","access_type","prompt","scope","json"],"mappings":";;;;AAAA;AACA;;;AAEA,MAAMA,SAAS;IAAC;CAAiD;AAE1D,eAAeC;IACpB,MAAMC,eAAe,IAAI,+JAAM,CAACC,IAAI,CAACC,MAAM,CACzCC,QAAQC,GAAG,CAACC,gBAAgB,EAC5BF,QAAQC,GAAG,CAACE,oBAAoB,EAChCH,QAAQC,GAAG,CAACG,mBAAmB;IAGjC,MAAMC,MAAMR,aAAaS,eAAe,CAAC;QACvCC,aAAa;QACbC,QAAQ;QACRC,OAAOd;IACT;IAEA,OAAO,gJAAY,CAACe,IAAI,CAAC;QAAEL;IAAI;AACjC"}}]
+}
