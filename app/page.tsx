@@ -13,6 +13,8 @@ export default function Home() {
   const [checking, setChecking] = useState(true);
 
   const app = useApplications();
+  // table + controls are "busy" during the initial DB load or an active scan
+  const busy = app.initialLoading || app.scanning;
 
   useEffect(() => {
     fetch("/api/auth/status")
@@ -53,6 +55,11 @@ export default function Home() {
     );
   }
 
+  const emptyMessage =
+    app.counts.All === 0
+      ? "No applications yet — run a scan to pull them in."
+      : "No applications match your filters.";
+
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-6xl mx-auto">
@@ -76,27 +83,23 @@ export default function Home() {
           onScan={app.runScan}
         />
 
-        {app.hasScanned && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <FilterPills
-              active={app.statusFilter}
-              counts={app.counts}
-              scanning={app.scanning}
-              onChange={app.setStatusFilter}
-            />
-            <SearchSort
-              search={app.search}
-              sortBy={app.sortBy}
-              scanning={app.scanning}
-              onSearch={app.setSearch}
-              onSort={app.setSortBy}
-            />
-            <ApplicationsTable items={app.pageItems} scanning={app.scanning} />
-            {!app.scanning && (
-              <Pagination page={app.page} totalPages={app.totalPages} onChange={app.setPage} />
-            )}
-          </div>
-        )}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <FilterPills
+            active={app.statusFilter}
+            counts={app.counts}
+            scanning={busy}
+            onChange={app.setStatusFilter}
+          />
+          <SearchSort
+            search={app.search}
+            sortBy={app.sortBy}
+            scanning={busy}
+            onSearch={app.setSearch}
+            onSort={app.setSortBy}
+          />
+          <ApplicationsTable items={app.pageItems} scanning={busy} emptyMessage={emptyMessage} />
+          {!busy && <Pagination page={app.page} totalPages={app.totalPages} onChange={app.setPage} />}
+        </div>
       </div>
     </main>
   );
