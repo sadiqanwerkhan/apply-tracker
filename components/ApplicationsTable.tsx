@@ -3,6 +3,7 @@ import { Row } from "@/lib/types";
 type Props = {
   items: Row[];
   scanning: boolean;
+  emptyMessage?: string;
 };
 
 function statusClasses(status: string) {
@@ -28,7 +29,7 @@ function SkeletonRows() {
   );
 }
 
-export default function ApplicationsTable({ items, scanning }: Props) {
+export default function ApplicationsTable({ items, scanning, emptyMessage = "No applications match your filters." }: Props) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -64,7 +65,7 @@ export default function ApplicationsTable({ items, scanning }: Props) {
         </tbody>
       </table>
       {!scanning && items.length === 0 && (
-        <p className="text-center text-gray-400 py-8">No applications match your filters.</p>
+        <p className="text-center text-gray-400 py-8">{emptyMessage}</p>
       )}
     </div>
   );

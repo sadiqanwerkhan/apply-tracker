@@ -12,22 +12,33 @@ const TODAY = isoDate(new Date());
 const SIXTY_AGO = isoDate(new Date(Date.now() - 60 * 86400000));
 
 /**
- * Holds all application state and logic: scanning, filtering,
- * sorting, and pagination. The UI components just read from this.
+ * Holds all application state and logic: initial DB load, scanning,
+ * filtering, sorting, and pagination. UI components just read from this.
  */
 export function useApplications() {
   const [startDate, setStartDate] = useState(SIXTY_AGO);
   const [endDate, setEndDate] = useState(TODAY);
 
   const [rows, setRows] = useState<Row[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
-  const [hasScanned, setHasScanned] = useState(false);
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [sortBy, setSortBy] = useState("date-desc");
   const [page, setPage] = useState(1);
+
+  // load whatever is already stored in the DB on first render (no Gmail, no AI)
+  useEffect(() => {
+    fetch("/api/applications")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.rows) setRows(d.rows);
+      })
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
+  }, []);
 
   // whenever a filter changes, jump back to page 1
   useEffect(() => {
@@ -37,14 +48,15 @@ export function useApplications() {
   async function runScan() {
     setScanning(true);
     setError("");
-    setHasScanned(true);
     setPage(1);
+    setSearch("");
+    setStatusFilter("All");
+    setSortBy("date-desc");
     try {
       const res = await fetch(`/api/scan?start=${startDate}&end=${endDate}`);
       const data = await res.json();
       if (data.error) {
         setError(data.error === "not_connected" ? "Please reconnect Gmail." : "Scan failed. Try again.");
-        setRows([]);
       } else {
         setRows(data.rows);
       }
@@ -65,7 +77,6 @@ export function useApplications() {
     [rows]
   );
 
-  // filter + search + sort (the one place memoization is genuinely idiomatic)
   const filtered = useMemo(() => {
     return rows
       .filter((r) => statusFilter === "All" || r.status === statusFilter)
@@ -82,7 +93,7 @@ export function useApplications() {
 
   return {
     startDate, setStartDate, endDate, setEndDate,
-    scanning, hasScanned, error,
+    initialLoading, scanning, error,
     search, setSearch, statusFilter, setStatusFilter, sortBy, setSortBy,
     page, setPage, totalPages, pageItems, filtered,
     counts, runScan,
