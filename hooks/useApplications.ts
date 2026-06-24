@@ -96,6 +96,7 @@ export function useApplications() {
     initialLoading, scanning, error,
     search, setSearch, statusFilter, setStatusFilter, sortBy, setSortBy,
     page, setPage, totalPages, pageItems, filtered,
+    allRows: rows,
     counts, runScan,
   };
 }
