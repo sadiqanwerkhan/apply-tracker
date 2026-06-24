@@ -11,7 +11,7 @@ const OPTIONS: StatusFilter[] = ["All", "Advancing", "Pending", "Rejected"];
 
 export default function FilterPills({ active, counts, scanning, onChange }: Props) {
   return (
-    <div className="flex flex-wrap gap-2 mb-5">
+    <div className="flex flex-wrap gap-2">
       {OPTIONS.map((s) => (
         <button
           key={s}

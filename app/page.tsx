@@ -7,13 +7,13 @@ import FilterPills from "@/components/FilterPills";
 import SearchSort from "@/components/SearchSort";
 import ApplicationsTable from "@/components/ApplicationsTable";
 import Pagination from "@/components/Pagination";
+import ExportControls from "@/components/ExportControls";
 
 export default function Home() {
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
 
   const app = useApplications();
-  // table + controls are "busy" during the initial DB load or an active scan
   const busy = app.initialLoading || app.scanning;
 
   useEffect(() => {
@@ -84,12 +84,23 @@ export default function Home() {
         />
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <FilterPills
-            active={app.statusFilter}
-            counts={app.counts}
-            scanning={busy}
-            onChange={app.setStatusFilter}
-          />
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+            <FilterPills
+              active={app.statusFilter}
+              counts={app.counts}
+              scanning={busy}
+              onChange={app.setStatusFilter}
+            />
+            {!busy && (
+              <ExportControls
+                allRows={app.allRows}
+                visibleRows={app.filtered}
+                statusFilter={app.statusFilter}
+                search={app.search}
+              />
+            )}
+          </div>
+
           <SearchSort
             search={app.search}
             sortBy={app.sortBy}
