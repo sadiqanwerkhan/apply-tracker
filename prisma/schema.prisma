@@ -7,9 +7,10 @@ datasource db {
   provider = "sqlite"
 }
 
-// ---- existing app data (unchanged for now; userId comes in Stage 2) ----
+// ---- app data, now scoped per user ----
 model Email {
-  id         String   @id
+  id         String   // Gmail message ID (unique within a user's mailbox)
+  userId     String
   companyKey String
   company    String
   role       String
@@ -19,9 +20,11 @@ model Email {
   subject    String
   date       DateTime
   createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@id([userId, id])
+  @@index([userId])
   @@index([companyKey])
-  @@index([date])
 }
 
 // ---- Auth.js (NextAuth) tables ----
@@ -33,6 +36,7 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
+  emails        Email[]
 }
 
 model Account {
