@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { aggregateEmails } from "@/lib/aggregate";
+import { getCurrentUser } from "@/lib/currentUser";
 
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+
   try {
-    const emails = await prisma.email.findMany();
+    const emails = await prisma.email.findMany({ where: { userId: user.id } });
     const rows = aggregateEmails(
       emails.map((e) => ({
         companyKey: e.companyKey,

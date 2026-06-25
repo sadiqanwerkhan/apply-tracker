@@ -1,10 +1,10 @@
 import { google } from "googleapis";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { classify, extractCompany, extractRole } from "@/lib/classify";
 import { aiClassifyBatch, AiStatus } from "@/lib/aiClassify";
 import { aggregateEmails } from "@/lib/aggregate";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/currentUser";
 
 const MAX_MESSAGES = 200;
 const FETCH_CHUNK = 10;
@@ -56,10 +56,17 @@ function keywordStatus(subject: string, body: string): AiStatus {
 }
 
 export async function GET(req: NextRequest) {
-  const cookieStore = await cookies();
-  const tokenCookie = cookieStore.get("gmail_tokens");
-  if (!tokenCookie) {
-    return NextResponse.json({ error: "not_connected" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+
+  // the user's stored Google credentials (saved by Auth.js at sign-in)
+  const account = await prisma.account.findFirst({
+    where: { userId: user.id, provider: "google" },
+  });
+  if (!account?.access_token) {
+    return NextResponse.json({ error: "no_google_account" }, { status: 400 });
   }
 
   const startISO = req.nextUrl.searchParams.get("start") || "";
@@ -72,18 +79,35 @@ export async function GET(req: NextRequest) {
   const endG = isoToGmail(endISO, 1);
 
   try {
-    const tokens = JSON.parse(tokenCookie.value);
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      process.env.GOOGLE_CLIENT_SECRET
     );
-    oauth2Client.setCredentials(tokens);
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    oauth2Client.setCredentials({
+      access_token: account.access_token,
+      refresh_token: account.refresh_token ?? undefined,
+      expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
+    });
+    // persist a refreshed access token back to the DB when Google issues one
+    oauth2Client.on("tokens", async (tokens) => {
+      try {
+        await prisma.account.update({
+          where: { id: account.id },
+          data: {
+            access_token: tokens.access_token ?? account.access_token,
+            expires_at: tokens.expiry_date ? Math.floor(tokens.expiry_date / 1000) : account.expires_at,
+            ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
+          },
+        });
+      } catch {
+        // non-fatal: scan can still proceed with the in-memory token
+      }
+    });
 
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const query = buildQuery(startG, endG);
 
-    // 1) collect message IDs for the range (fast — IDs only)
+    // 1) message IDs for the range
     let ids: string[] = [];
     let pageToken: string | undefined = undefined;
     do {
@@ -94,11 +118,14 @@ export async function GET(req: NextRequest) {
     } while (pageToken && ids.length < MAX_MESSAGES);
     ids = ids.slice(0, MAX_MESSAGES);
 
-    // 2) which of these are already classified in the DB?
-    const existing = await prisma.email.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    // 2) which of these are already classified for THIS user?
+    const existing = await prisma.email.findMany({
+      where: { userId: user.id, id: { in: ids } },
+      select: { id: true },
+    });
     const existingIds = new Set(existing.map((e) => e.id));
     const newIds = ids.filter((id) => !existingIds.has(id));
-    console.log(`Scan: ${ids.length} emails in range, ${existingIds.size} cached, ${newIds.length} new to classify`);
+    console.log(`Scan (${user.email}): ${ids.length} in range, ${existingIds.size} cached, ${newIds.length} new`);
 
     // 3) fetch bodies for NEW emails only
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,19 +182,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 6) save the new classifications to the DB
+    // 6) save new classifications, tagged with this user
     if (newParsed.length > 0) {
       await prisma.email.createMany({
         data: newParsed.map((p, i) => ({
-          id: p.id, companyKey: p.companyKey, company: p.company, role: p.role,
+          id: p.id, userId: user.id, companyKey: p.companyKey, company: p.company, role: p.role,
           sender: p.sender, isAts: p.isAts, status: newStatuses[i],
           subject: p.subject, date: new Date(p.date),
         })),
       });
     }
 
-    // 7) aggregate ALL stored emails (so the dashboard shows everything, new ones included)
-    const allEmails = await prisma.email.findMany();
+    // 7) aggregate ALL of this user's emails
+    const allEmails = await prisma.email.findMany({ where: { userId: user.id } });
     const rows = aggregateEmails(
       allEmails.map((e) => ({
         companyKey: e.companyKey, company: e.company, role: e.role, sender: e.sender,
