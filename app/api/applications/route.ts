@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const emails = await prisma.email.findMany({ where: { userId: user.id } });
     const rows = aggregateEmails(
-      emails.map((e) => ({
+      emails.map((e: typeof emails[number]) => ({
         companyKey: e.companyKey,
         company: e.company,
         role: e.role,
