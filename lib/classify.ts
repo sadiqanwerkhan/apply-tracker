@@ -124,3 +124,35 @@ function cap(s: string): string {
 function capWords(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+// ---- personal / consumer email providers to ignore (not real recruiters) ----
+const PERSONAL_DOMAINS = [
+  // Google
+  "gmail.com", "googlemail.com",
+  // Microsoft
+  "outlook.com", "hotmail.com", "hotmail.co.uk", "live.com", "live.co.uk", "msn.com",
+  // Yahoo
+  "yahoo.com", "yahoo.co.uk", "yahoo.de", "ymail.com", "rocketmail.com",
+  // Apple
+  "icloud.com", "me.com", "mac.com",
+  // AOL
+  "aol.com",
+  // Proton
+  "proton.me", "protonmail.com",
+  // German consumer providers (common where the user is based)
+  "gmx.com", "gmx.de", "gmx.net", "web.de", "t-online.de", "freenet.de", "arcor.de",
+  // other consumer mail
+  "mail.com", "yandex.com", "yandex.ru", "zoho.com", "tutanota.com", "tuta.io",
+];
+
+/**
+ * True if the sender is a personal/consumer email address (Gmail, Outlook, etc.),
+ * which we treat as personal correspondence rather than a recruiter/company.
+ */
+export function isPersonalSender(from: string): boolean {
+  if (!from) return false;
+  const m = from.match(/<(.+?)>/);
+  const email = (m ? m[1] : from).trim().toLowerCase();
+  const domain = email.split("@")[1] || "";
+  return PERSONAL_DOMAINS.includes(domain);
+}

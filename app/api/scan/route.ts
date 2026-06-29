@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
-import { classify, extractCompany, extractRole } from "@/lib/classify";
+import { classify, extractCompany, extractRole, isPersonalSender } from "@/lib/classify";
 import { aiClassifyBatch, AiStatus } from "@/lib/aiClassify";
 import { aggregateEmails } from "@/lib/aggregate";
 import { prisma } from "@/lib/prisma";
@@ -153,6 +153,9 @@ export async function GET(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const subject = (headers.find((h: any) => h.name === "Subject") || {}).value || "";
       const date = parseInt(msg.internalDate, 10);
+
+      // skip personal/consumer email senders (Gmail, Outlook, etc.) — not recruiters
+      if (isPersonalSender(from)) continue;
 
       const info = extractCompany(from);
       const role = extractRole(subject);
