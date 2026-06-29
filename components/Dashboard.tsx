@@ -7,6 +7,7 @@ import SearchSort from "@/components/SearchSort";
 import ApplicationsTable from "@/components/ApplicationsTable";
 import Pagination from "@/components/Pagination";
 import ExportControls from "@/components/ExportControls";
+import ScanningQuote from "@/components/ScanningQuote";
 
 type Props = {
   userEmail: string;
@@ -72,6 +73,7 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
             onSearch={app.setSearch}
             onSort={app.setSortBy}
           />
+          {app.scanning && <ScanningQuote />}
           <ApplicationsTable items={app.pageItems} scanning={busy} emptyMessage={emptyMessage} />
           {!busy && <Pagination page={app.page} totalPages={app.totalPages} onChange={app.setPage} />}
         </div>
