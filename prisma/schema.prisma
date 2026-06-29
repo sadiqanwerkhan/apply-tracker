@@ -17,6 +17,8 @@ model Email {
   sender     String
   isAts      Boolean
   status     String
+  stage      String   @default("update")
+  summary    String?
   subject    String
   date       DateTime
   createdAt  DateTime @default(now())

@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import { classify, extractCompany, extractRole, isPersonalSender } from "@/lib/classify";
-import { aiClassifyBatch, AiStatus } from "@/lib/aiClassify";
+import { aiClassifyBatch, stageToStatus, Stage } from "@/lib/aiClassify";
 import { aggregateEmails } from "@/lib/aggregate";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
@@ -48,11 +48,11 @@ function getBodyText(payload: any): string {
   return out;
 }
 
-function keywordStatus(subject: string, body: string): AiStatus {
+function keywordStage(subject: string, body: string): Stage {
   const kw = classify((subject + " " + body).toLowerCase());
-  if (kw === "Rejected") return "Rejected";
-  if (kw === "Advancing") return "Advancing";
-  return "Pending";
+  if (kw === "Rejected") return "rejected";
+  if (kw === "Advancing") return "interview";
+  return "applied";
 }
 
 export async function GET(req: NextRequest) {
@@ -88,7 +88,6 @@ export async function GET(req: NextRequest) {
       refresh_token: account.refresh_token ?? undefined,
       expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
     });
-    // persist a refreshed access token back to the DB when Google issues one
     oauth2Client.on("tokens", async (tokens) => {
       try {
         await prisma.account.update({
@@ -100,7 +99,7 @@ export async function GET(req: NextRequest) {
           },
         });
       } catch {
-        // non-fatal: scan can still proceed with the in-memory token
+        // non-fatal
       }
     });
 
@@ -140,12 +139,12 @@ export async function GET(req: NextRequest) {
       got.forEach((m) => { if (m) newMessages.push(m); });
     }
 
-    // 4) parse new messages
+    // 4) parse new messages (skip personal senders; keep the rest for the AI to judge)
     type Parsed = {
-      id: string; companyKey: string; company: string; role: string;
-      sender: string; isAts: boolean; date: number; subject: string; body: string;
+      id: string; subject: string; body: string; date: number;
+      regexCompany: string; regexRole: string; sender: string; isAts: boolean;
     };
-    const newParsed: Parsed[] = [];
+    const parsed: Parsed[] = [];
     for (const msg of newMessages) {
       const headers = msg.payload?.headers || [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -154,44 +153,66 @@ export async function GET(req: NextRequest) {
       const subject = (headers.find((h: any) => h.name === "Subject") || {}).value || "";
       const date = parseInt(msg.internalDate, 10);
 
-      // skip personal/consumer email senders (Gmail, Outlook, etc.) — not recruiters
+      // skip personal/consumer email senders (Gmail, Outlook, etc.)
       if (isPersonalSender(from)) continue;
 
       const info = extractCompany(from);
       const role = extractRole(subject);
-
-      let label: string, key: string;
-      if (info.name) { label = info.name; key = info.name.toLowerCase(); }
-      else if (role) { label = "(" + role + ")"; key = "role:" + role.toLowerCase(); }
-      else continue;
-
       const body = getBodyText(msg.payload);
-      newParsed.push({
-        id: msg.id, companyKey: key, company: label, role,
-        sender: info.sender, isAts: info.isAts, date, subject, body,
+
+      parsed.push({
+        id: msg.id, subject, body, date,
+        regexCompany: info.name, regexRole: role, sender: info.sender, isAts: info.isAts,
       });
     }
 
-    // 5) AI-classify the new ones (keyword fallback per item)
-    const newStatuses: AiStatus[] = [];
-    for (let i = 0; i < newParsed.length; i += AI_BATCH) {
-      const batch = newParsed.slice(i, i + AI_BATCH);
+    // 5) AI: company + role + stage + promotional. Promos are dropped.
+    type Final = {
+      id: string; companyKey: string; company: string; role: string;
+      sender: string; isAts: boolean; stage: Stage; subject: string; date: number;
+    };
+    const finals: Final[] = [];
+    let skippedPromo = 0;
+
+    for (let i = 0; i < parsed.length; i += AI_BATCH) {
+      const batch = parsed.slice(i, i + AI_BATCH);
       const ai = await aiClassifyBatch(batch.map((p) => ({ subject: p.subject, body: p.body })));
+
       for (let j = 0; j < batch.length; j++) {
-        newStatuses.push(ai[j] ?? keywordStatus(batch[j].subject, batch[j].body));
+        const p = batch[j];
+        const r = ai[j];
+
+        // promotional / newsletter / job-alert → skip entirely (don't store)
+        if (r && r.promotional) { skippedPromo++; continue; }
+
+        const stage: Stage = r ? r.stage : keywordStage(p.subject, p.body);
+        const company = (r && r.company) ? r.company : (p.regexCompany || "");
+        const role = (r && r.role) ? r.role : (p.regexRole || "");
+
+        let label: string, key: string;
+        if (company) { label = company; key = company.toLowerCase(); }
+        else if (role) { label = "(" + role + ")"; key = "role:" + role.toLowerCase(); }
+        else continue; // nothing to identify it by → skip
+
+        finals.push({
+          id: p.id, companyKey: key, company: label, role,
+          sender: p.sender, isAts: p.isAts, stage, subject: p.subject, date: p.date,
+        });
       }
-      if (i + AI_BATCH < newParsed.length) {
+
+      if (i + AI_BATCH < parsed.length) {
         await new Promise((r) => setTimeout(r, AI_DELAY_MS));
       }
     }
+    console.log(`Scan (${user.email}): stored ${finals.length}, skipped ${skippedPromo} promotional`);
 
-    // 6) save new classifications, tagged with this user
-    if (newParsed.length > 0) {
+    // 6) save (stage + derived status), tagged with this user
+    if (finals.length > 0) {
       await prisma.email.createMany({
-        data: newParsed.map((p, i) => ({
-          id: p.id, userId: user.id, companyKey: p.companyKey, company: p.company, role: p.role,
-          sender: p.sender, isAts: p.isAts, status: newStatuses[i],
-          subject: p.subject, date: new Date(p.date),
+        data: finals.map((f) => ({
+          id: f.id, userId: user.id, companyKey: f.companyKey, company: f.company, role: f.role,
+          sender: f.sender, isAts: f.isAts, stage: f.stage, status: stageToStatus(f.stage),
+          subject: f.subject, date: new Date(f.date),
         })),
       });
     }
@@ -201,11 +222,11 @@ export async function GET(req: NextRequest) {
     const rows = aggregateEmails(
       allEmails.map((e) => ({
         companyKey: e.companyKey, company: e.company, role: e.role, sender: e.sender,
-        isAts: e.isAts, status: e.status, date: e.date.getTime(), subject: e.subject,
+        isAts: e.isAts, status: e.status, stage: e.stage, date: e.date.getTime(), subject: e.subject,
       }))
     );
 
-    return NextResponse.json({ rows, newCount: newParsed.length });
+    return NextResponse.json({ rows, newCount: finals.length });
   } catch (err) {
     console.error("Scan error:", err);
     return NextResponse.json({ error: "scan_failed" }, { status: 500 });

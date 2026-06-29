@@ -1,4 +1,4 @@
-import { Row } from "@/lib/types";
+import { Row, STAGE_LABELS } from "@/lib/types";
 
 type Props = {
   items: Row[];
@@ -12,6 +12,13 @@ function statusClasses(status: string) {
   return "bg-amber-100 text-amber-700";
 }
 
+function stageClasses(stage: string) {
+  if (stage === "rejected") return "bg-red-50 text-red-600";
+  if (stage === "offer") return "bg-emerald-50 text-emerald-700";
+  if (stage === "interview" || stage === "assessment" || stage === "screening") return "bg-blue-50 text-blue-600";
+  return "bg-gray-100 text-gray-500";
+}
+
 function SkeletonRows() {
   return (
     <>
@@ -22,7 +29,7 @@ function SkeletonRows() {
           <td className="py-4 px-3"><div className="h-5 w-16 bg-gray-200 rounded-full animate-pulse" /></td>
           <td className="py-4 px-3"><div className="h-3.5 bg-gray-200 rounded animate-pulse" style={{ width: "70%" }} /></td>
           <td className="py-4 px-3"><div className="h-3.5 bg-gray-200 rounded animate-pulse" style={{ width: "70%" }} /></td>
-          <td className="py-4 px-3"><div className="h-3.5 bg-gray-200 rounded animate-pulse" style={{ width: "60%" }} /></td>
+          <td className="py-4 px-3"><div className="h-5 w-20 bg-gray-200 rounded-full animate-pulse" /></td>
         </tr>
       ))}
     </>
@@ -40,7 +47,7 @@ export default function ApplicationsTable({ items, scanning, emptyMessage = "No 
             <th className="py-3 px-3 font-medium">Status</th>
             <th className="py-3 px-3 font-medium">Applied</th>
             <th className="py-3 px-3 font-medium">Last update</th>
-            <th className="py-3 px-3 font-medium">Latest subject</th>
+            <th className="py-3 px-3 font-medium">Current stage</th>
           </tr>
         </thead>
         <tbody>
@@ -58,7 +65,11 @@ export default function ApplicationsTable({ items, scanning, emptyMessage = "No 
                 </td>
                 <td className="py-3 px-3 text-gray-500">{r.firstSeen}</td>
                 <td className="py-3 px-3 text-gray-500">{r.lastSeen}</td>
-                <td className="py-3 px-3 text-gray-400 text-xs max-w-xs truncate">{r.note || "—"}</td>
+                <td className="py-3 px-3">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${stageClasses(r.currentStage)}`}>
+                    {STAGE_LABELS[r.currentStage] || "Update"}
+                  </span>
+                </td>
               </tr>
             ))
           )}

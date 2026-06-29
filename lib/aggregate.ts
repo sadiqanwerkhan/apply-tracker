@@ -1,4 +1,4 @@
-import { Row } from "@/lib/types";
+import { Row, TimelineEntry } from "@/lib/types";
 
 // One email's worth of data, the input to aggregation.
 export type EmailItem = {
@@ -8,9 +8,12 @@ export type EmailItem = {
   sender: string;
   isAts: boolean;
   status: string; // "Rejected" | "Advancing" | "Pending"
+  stage: string;  // "applied" | "screening" | ... | "rejected" | "update"
   date: number;   // epoch ms
   subject: string;
 };
+
+type Event = { date: number; stage: string; subject: string };
 
 type Rec = {
   company: string;
@@ -25,12 +28,13 @@ type Rec = {
   lastSeen: number;
   rejectSubject: string;
   advanceSubject: string;
-  bestNameLen: number; // track the most complete display name seen
+  bestNameLen: number;
+  events: Event[];
 };
 
 // legal suffixes and noise words that make the same company look different
 const SUFFIXES = [
-  "gmbh", "ag", "se", "kg", "kgaa", "ohg", "ug", "mbh", "co", "kg",
+  "gmbh", "ag", "se", "kg", "kgaa", "ohg", "ug", "mbh", "co",
   "inc", "incorporated", "ltd", "limited", "llc", "llp", "lp", "plc",
   "corp", "corporation", "company", "group", "holding", "holdings",
   "technologies", "technology", "tech", "solutions", "software", "labs",
@@ -40,16 +44,13 @@ const SUFFIXES = [
 /**
  * Normalize a company name into a stable grouping key.
  * "Flip GmbH", "Flip", "FLIP gmbh" all become "flip" so they merge.
- * Deliberately conservative: strips legal/suffix noise but does NOT do
- * fuzzy matching, to avoid wrongly merging two different companies.
+ * Conservative: strips legal/suffix noise but does NOT fuzzy-match,
+ * to avoid wrongly merging two different companies.
  */
 function normalizeKey(company: string): string {
   let s = (company || "").toLowerCase().trim();
-  // drop anything in brackets, and common separators' trailing parts
   s = s.replace(/\(.*?\)/g, " ");
-  // keep only letters, numbers, spaces
   s = s.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-  // remove trailing suffix words (possibly several, e.g. "x technologies gmbh")
   const words = s.split(" ").filter(Boolean);
   while (words.length > 1 && SUFFIXES.includes(words[words.length - 1])) {
     words.pop();
@@ -59,16 +60,13 @@ function normalizeKey(company: string): string {
 }
 
 /**
- * Collapse many per-email rows into one row per company,
- * resolving the final status (a later rejection beats an earlier advance).
- * Grouping is by a NORMALIZED key derived from the company name here,
- * so it also fixes already-stored rows without re-scanning.
+ * Collapse many per-email rows into one row per company.
+ * Resolves a final status, AND builds an ordered timeline of the journey.
  */
 export function aggregateEmails(items: EmailItem[]): Row[] {
   const byCompany: Record<string, Rec> = {};
 
   for (const it of items) {
-    // role-bucketed items keep their own key; real companies get normalized
     const key = it.companyKey.startsWith("role:")
       ? it.companyKey
       : normalizeKey(it.company);
@@ -81,11 +79,11 @@ export function aggregateEmails(items: EmailItem[]): Row[] {
         firstSeen: it.date, lastSeen: it.date,
         rejectSubject: "", advanceSubject: "",
         bestNameLen: it.company.length,
+        events: [],
       };
     }
     const rec = byCompany[key];
 
-    // prefer the longest/most complete display name we've seen for this group
     if (it.company.length > rec.bestNameLen) {
       rec.company = it.company;
       rec.bestNameLen = it.company.length;
@@ -93,6 +91,8 @@ export function aggregateEmails(items: EmailItem[]): Row[] {
     if (!rec.role && it.role) rec.role = it.role;
     if (it.date < rec.firstSeen) rec.firstSeen = it.date;
     if (it.date > rec.lastSeen) rec.lastSeen = it.date;
+
+    rec.events.push({ date: it.date, stage: it.stage || "update", subject: it.subject });
 
     if (it.status === "Rejected") {
       rec.hasReject = true;
@@ -109,6 +109,20 @@ export function aggregateEmails(items: EmailItem[]): Row[] {
     else if (r.hasAdvance) status = "Advancing";
     else status = "Pending";
 
+    // build the ordered timeline: sort by date, collapse consecutive same-stage runs
+    const sorted = r.events.slice().sort((a, b) => a.date - b.date);
+    const timeline: TimelineEntry[] = [];
+    for (const ev of sorted) {
+      const last = timeline[timeline.length - 1];
+      if (last && last.stage === ev.stage) continue;
+      timeline.push({
+        date: new Date(ev.date).toISOString().slice(0, 10),
+        stage: ev.stage,
+        subject: ev.subject,
+      });
+    }
+    const currentStage = sorted.length ? sorted[sorted.length - 1].stage : "update";
+
     const note = status === "Advancing" ? r.advanceSubject : status === "Rejected" ? r.rejectSubject : "";
     return {
       company: r.company,
@@ -119,6 +133,8 @@ export function aggregateEmails(items: EmailItem[]): Row[] {
       firstSeen: new Date(r.firstSeen).toISOString().slice(0, 10),
       lastSeen: new Date(r.lastSeen).toISOString().slice(0, 10),
       note,
+      currentStage,
+      timeline,
     };
   });
 }
