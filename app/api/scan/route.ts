@@ -61,7 +61,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
-  // the user's stored Google credentials (saved by Auth.js at sign-in)
   const account = await prisma.account.findFirst({
     where: { userId: user.id, provider: "google" },
   });
@@ -117,14 +116,18 @@ export async function GET(req: NextRequest) {
     } while (pageToken && ids.length < MAX_MESSAGES);
     ids = ids.slice(0, MAX_MESSAGES);
 
-    // 2) which of these are already classified for THIS user?
-    const existing = await prisma.email.findMany({
-      where: { userId: user.id, id: { in: ids } },
-      select: { id: true },
-    });
-    const existingIds = new Set(existing.map((e) => e.id));
-    const newIds = ids.filter((id) => !existingIds.has(id));
-    console.log(`Scan (${user.email}): ${ids.length} in range, ${existingIds.size} cached, ${newIds.length} new`);
+    // 2) which of these have we already SEEN (either stored as an application,
+    //    or recorded in the skip list as a promo/unidentifiable email)?
+    const [existingEmails, skippedRows] = await Promise.all([
+      prisma.email.findMany({ where: { userId: user.id, id: { in: ids } }, select: { id: true } }),
+      prisma.skippedEmail.findMany({ where: { userId: user.id, messageId: { in: ids } }, select: { messageId: true } }),
+    ]);
+    const seen = new Set<string>([
+      ...existingEmails.map((e) => e.id),
+      ...skippedRows.map((s) => s.messageId),
+    ]);
+    const newIds = ids.filter((id) => !seen.has(id));
+    console.log(`Scan (${user.email}): ${ids.length} in range, ${seen.size} already seen, ${newIds.length} new`);
 
     // 3) fetch bodies for NEW emails only
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,6 +148,8 @@ export async function GET(req: NextRequest) {
       regexCompany: string; regexRole: string; sender: string; isAts: boolean;
     };
     const parsed: Parsed[] = [];
+    const skipIds: string[] = []; // emails we judged not worth storing — remember them
+
     for (const msg of newMessages) {
       const headers = msg.payload?.headers || [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,8 +158,8 @@ export async function GET(req: NextRequest) {
       const subject = (headers.find((h: any) => h.name === "Subject") || {}).value || "";
       const date = parseInt(msg.internalDate, 10);
 
-      // skip personal/consumer email senders (Gmail, Outlook, etc.)
-      if (isPersonalSender(from)) continue;
+      // personal/consumer sender → skip AND remember (don't reprocess next time)
+      if (isPersonalSender(from)) { skipIds.push(msg.id); continue; }
 
       const info = extractCompany(from);
       const role = extractRole(subject);
@@ -166,13 +171,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 5) AI: company + role + stage + promotional. Promos are dropped.
+    // 5) AI: company + role + stage + promotional. Promos & unidentifiable → skip list.
     type Final = {
       id: string; companyKey: string; company: string; role: string;
       sender: string; isAts: boolean; stage: Stage; subject: string; date: number;
     };
     const finals: Final[] = [];
-    let skippedPromo = 0;
 
     for (let i = 0; i < parsed.length; i += AI_BATCH) {
       const batch = parsed.slice(i, i + AI_BATCH);
@@ -182,8 +186,8 @@ export async function GET(req: NextRequest) {
         const p = batch[j];
         const r = ai[j];
 
-        // promotional / newsletter / job-alert → skip entirely (don't store)
-        if (r && r.promotional) { skippedPromo++; continue; }
+        // promotional / newsletter / job-alert → skip AND remember
+        if (r && r.promotional) { skipIds.push(p.id); continue; }
 
         const stage: Stage = r ? r.stage : keywordStage(p.subject, p.body);
         const company = (r && r.company) ? r.company : (p.regexCompany || "");
@@ -192,7 +196,7 @@ export async function GET(req: NextRequest) {
         let label: string, key: string;
         if (company) { label = company; key = company.toLowerCase(); }
         else if (role) { label = "(" + role + ")"; key = "role:" + role.toLowerCase(); }
-        else continue; // nothing to identify it by → skip
+        else { skipIds.push(p.id); continue; } // nothing to identify it by → skip AND remember
 
         finals.push({
           id: p.id, companyKey: key, company: label, role,
@@ -204,9 +208,9 @@ export async function GET(req: NextRequest) {
         await new Promise((r) => setTimeout(r, AI_DELAY_MS));
       }
     }
-    console.log(`Scan (${user.email}): stored ${finals.length}, skipped ${skippedPromo} promotional`);
+    console.log(`Scan (${user.email}): stored ${finals.length}, skipped ${skipIds.length}`);
 
-    // 6) save (stage + derived status), tagged with this user
+    // 6a) save real applications (stage + derived status)
     if (finals.length > 0) {
       await prisma.email.createMany({
         data: finals.map((f) => ({
@@ -217,7 +221,14 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 7) aggregate ALL of this user's emails
+    // 6b) remember skipped emails so we never reprocess them (keeps repeat scans fast)
+    if (skipIds.length > 0) {
+      await prisma.skippedEmail.createMany({
+        data: skipIds.map((id) => ({ userId: user.id, messageId: id })),
+      });
+    }
+
+    // 7) aggregate ALL of this user's stored applications
     const allEmails = await prisma.email.findMany({ where: { userId: user.id } });
     const rows = aggregateEmails(
       allEmails.map((e) => ({

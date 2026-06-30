@@ -74,3 +74,12 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+model SkippedEmail {
+  userId    String
+  messageId String
+  createdAt DateTime @default(now())
+
+  @@id([userId, messageId])
+  @@index([userId])
+}
