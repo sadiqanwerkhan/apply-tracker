@@ -20,6 +20,7 @@ export async function GET() {
         stage: e.stage,
         date: e.date.getTime(),
         subject: e.subject,
+        summary: e.summary,
       }))
     );
     return NextResponse.json({ rows });

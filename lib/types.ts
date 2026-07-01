@@ -1,7 +1,8 @@
 export type TimelineEntry = {
-  date: string;   // ISO yyyy-mm-dd, when this stage was first reached
-  stage: string;  // stage key
+  date: string;    // ISO yyyy-mm-dd, when this stage was first reached
+  stage: string;   // stage key
   subject: string;
+  reason?: string; // short "why" (only meaningful on a rejected entry)
 };
 
 export type Row = {
@@ -13,8 +14,9 @@ export type Row = {
   firstSeen: string;
   lastSeen: string;
   note: string;
-  currentStage: string;       // latest stage key (for the collapsed row)
-  timeline: TimelineEntry[];  // ordered journey (for the expandable view, Stage 2)
+  currentStage: string;       // latest stage key (collapsed row)
+  timeline: TimelineEntry[];  // ordered journey (expandable view)
+  rejectionReason: string;    // AI "why" summary, when rejected
 };
 
 export type StatusFilter = "All" | "Advancing" | "Pending" | "Rejected";

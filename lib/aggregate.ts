@@ -1,38 +1,21 @@
 import { Row, TimelineEntry } from "@/lib/types";
 
-// One email's worth of data, the input to aggregation.
 export type EmailItem = {
   companyKey: string;
   company: string;
   role: string;
   sender: string;
   isAts: boolean;
-  status: string; // "Rejected" | "Advancing" | "Pending"
-  stage: string;  // "applied" | "screening" | ... | "rejected" | "update"
-  date: number;   // epoch ms
+  status: string;
+  stage: string;
+  date: number;
   subject: string;
+  summary: string | null; // AI "why" (only set on rejection emails)
 };
 
-type Event = { date: number; stage: string; subject: string };
+type Event = { date: number; stage: string; subject: string; summary: string };
 
-type Rec = {
-  company: string;
-  role: string;
-  sender: string;
-  viaAts: boolean;
-  hasReject: boolean;
-  lastRejectDate: number | null;
-  hasAdvance: boolean;
-  lastAdvanceDate: number | null;
-  firstSeen: number;
-  lastSeen: number;
-  rejectSubject: string;
-  advanceSubject: string;
-  bestNameLen: number;
-  events: Event[];
-};
-
-// legal suffixes and noise words that make the same company look different
+// legal suffixes / noise that make the same company look different
 const SUFFIXES = [
   "gmbh", "ag", "se", "kg", "kgaa", "ohg", "ug", "mbh", "co",
   "inc", "incorporated", "ltd", "limited", "llc", "llp", "lp", "plc",
@@ -41,13 +24,7 @@ const SUFFIXES = [
   "international", "global", "digital", "ventures", "studios", "studio",
 ];
 
-/**
- * Normalize a company name into a stable grouping key.
- * "Flip GmbH", "Flip", "FLIP gmbh" all become "flip" so they merge.
- * Conservative: strips legal/suffix noise but does NOT fuzzy-match,
- * to avoid wrongly merging two different companies.
- */
-function normalizeKey(company: string): string {
+function normalizeCompanyKey(company: string): string {
   let s = (company || "").toLowerCase().trim();
   s = s.replace(/\(.*?\)/g, " ");
   s = s.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -59,82 +36,153 @@ function normalizeKey(company: string): string {
   return s || (company || "").toLowerCase().trim();
 }
 
+// normalize a role into a grouping key: drop gender markers, parentheticals, punctuation
+function normalizeRoleKey(role: string): string {
+  let s = (role || "").toLowerCase();
+  s = s.replace(/\(.*?\)/g, " "); // (all genders), (m/w/d), etc.
+  s = s.replace(/\b(all genders|m\/w\/d|m\/f\/d|f\/m\/d|w\/m\/d|m\/w\/x|d\/m\/w|gn|div)\b/gi, " ");
+  s = s.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return s;
+}
+
 /**
- * Collapse many per-email rows into one row per company.
- * Resolves a final status, AND builds an ordered timeline of the journey.
+ * Merge role keys where one is a prefix of another (handles the same application
+ * being worded with extra trailing words across different emails). Returns a map
+ * from each role key to a canonical group key.
  */
-export function aggregateEmails(items: EmailItem[]): Row[] {
-  const byCompany: Record<string, Rec> = {};
-
-  for (const it of items) {
-    const key = it.companyKey.startsWith("role:")
-      ? it.companyKey
-      : normalizeKey(it.company);
-
-    if (!byCompany[key]) {
-      byCompany[key] = {
-        company: it.company, role: it.role, sender: it.sender, viaAts: it.isAts,
-        hasReject: false, lastRejectDate: null,
-        hasAdvance: false, lastAdvanceDate: null,
-        firstSeen: it.date, lastSeen: it.date,
-        rejectSubject: "", advanceSubject: "",
-        bestNameLen: it.company.length,
-        events: [],
-      };
+function canonicalRoleGroups(roleKeys: string[]): Map<string, string> {
+  const sorted = [...new Set(roleKeys)].sort((a, b) => a.length - b.length);
+  const canon = new Map<string, string>();
+  for (const key of sorted) {
+    let assigned: string | null = null;
+    for (const [existing, c] of canon) {
+      if (key === existing || key.startsWith(existing + " ")) { assigned = c; break; }
     }
-    const rec = byCompany[key];
+    canon.set(key, assigned ?? key);
+  }
+  return canon;
+}
 
-    if (it.company.length > rec.bestNameLen) {
-      rec.company = it.company;
-      rec.bestNameLen = it.company.length;
-    }
-    if (!rec.role && it.role) rec.role = it.role;
-    if (it.date < rec.firstSeen) rec.firstSeen = it.date;
-    if (it.date > rec.lastSeen) rec.lastSeen = it.date;
+// build one Row (one application) from a set of emails that belong together
+function buildRow(emails: EmailItem[]): Row {
+  let company = emails[0].company;
+  let companyLen = company.length;
+  let role = "";
+  let roleLen = 0;
+  const sender = emails[0].sender;
+  const viaAts = emails[0].isAts;
 
-    rec.events.push({ date: it.date, stage: it.stage || "update", subject: it.subject });
+  let firstSeen = emails[0].date;
+  let lastSeen = emails[0].date;
+
+  let hasReject = false, lastRejectDate: number | null = null, rejectSubject = "", rejectSummary = "";
+  let hasAdvance = false, lastAdvanceDate: number | null = null, advanceSubject = "";
+
+  const events: Event[] = [];
+
+  for (const it of emails) {
+    if (it.company.length > companyLen) { company = it.company; companyLen = it.company.length; }
+    if (it.role && it.role.length > roleLen) { role = it.role; roleLen = it.role.length; }
+    if (it.date < firstSeen) firstSeen = it.date;
+    if (it.date > lastSeen) lastSeen = it.date;
+
+    events.push({ date: it.date, stage: it.stage || "update", subject: it.subject, summary: it.summary || "" });
 
     if (it.status === "Rejected") {
-      rec.hasReject = true;
-      if (!rec.lastRejectDate || it.date > rec.lastRejectDate) { rec.lastRejectDate = it.date; rec.rejectSubject = it.subject; }
+      hasReject = true;
+      if (!lastRejectDate || it.date > lastRejectDate) { lastRejectDate = it.date; rejectSubject = it.subject; rejectSummary = it.summary || ""; }
     } else if (it.status === "Advancing") {
-      rec.hasAdvance = true;
-      if (!rec.lastAdvanceDate || it.date > rec.lastAdvanceDate) { rec.lastAdvanceDate = it.date; rec.advanceSubject = it.subject; }
+      hasAdvance = true;
+      if (!lastAdvanceDate || it.date > lastAdvanceDate) { lastAdvanceDate = it.date; advanceSubject = it.subject; }
     }
   }
 
-  return Object.values(byCompany).map((r) => {
-    let status: string;
-    if (r.hasReject && (!r.lastAdvanceDate || (r.lastRejectDate || 0) >= r.lastAdvanceDate)) status = "Rejected";
-    else if (r.hasAdvance) status = "Advancing";
-    else status = "Pending";
+  let status: string;
+  if (hasReject && (!lastAdvanceDate || (lastRejectDate || 0) >= lastAdvanceDate)) status = "Rejected";
+  else if (hasAdvance) status = "Advancing";
+  else status = "Pending";
 
-    // build the ordered timeline: sort by date, collapse consecutive same-stage runs
-    const sorted = r.events.slice().sort((a, b) => a.date - b.date);
-    const timeline: TimelineEntry[] = [];
-    for (const ev of sorted) {
-      const last = timeline[timeline.length - 1];
-      if (last && last.stage === ev.stage) continue;
-      timeline.push({
-        date: new Date(ev.date).toISOString().slice(0, 10),
-        stage: ev.stage,
-        subject: ev.subject,
-      });
+  const sorted = events.slice().sort((a, b) => a.date - b.date);
+  const timeline: TimelineEntry[] = [];
+  for (const ev of sorted) {
+    const last = timeline[timeline.length - 1];
+    if (last && last.stage === ev.stage) {
+      if (!last.reason && ev.summary) last.reason = ev.summary;
+      continue;
     }
-    const currentStage = sorted.length ? sorted[sorted.length - 1].stage : "update";
+    timeline.push({
+      date: new Date(ev.date).toISOString().slice(0, 10),
+      stage: ev.stage,
+      subject: ev.subject,
+      reason: ev.summary || undefined,
+    });
+  }
+  const currentStage = sorted.length ? sorted[sorted.length - 1].stage : "update";
 
-    const note = status === "Advancing" ? r.advanceSubject : status === "Rejected" ? r.rejectSubject : "";
-    return {
-      company: r.company,
-      role: r.role || "",
-      status,
-      confidence: r.viaAts ? "Low" : "High",
-      sender: r.viaAts ? r.sender : "",
-      firstSeen: new Date(r.firstSeen).toISOString().slice(0, 10),
-      lastSeen: new Date(r.lastSeen).toISOString().slice(0, 10),
-      note,
-      currentStage,
-      timeline,
-    };
-  });
+  const note = status === "Advancing" ? advanceSubject : status === "Rejected" ? rejectSubject : "";
+  return {
+    company,
+    role: role || "",
+    status,
+    confidence: viaAts ? "Low" : "High",
+    sender: viaAts ? sender : "",
+    firstSeen: new Date(firstSeen).toISOString().slice(0, 10),
+    lastSeen: new Date(lastSeen).toISOString().slice(0, 10),
+    note,
+    currentStage,
+    timeline,
+    rejectionReason: status === "Rejected" ? rejectSummary : "",
+  };
+}
+
+/**
+ * Group emails into applications. An application is a (company + role) pair,
+ * so two different roles at the same company become two separate rows.
+ */
+export function aggregateEmails(items: EmailItem[]): Row[] {
+  // 1) group by company
+  const byCompany: Record<string, EmailItem[]> = {};
+  for (const it of items) {
+    const ck = it.companyKey.startsWith("role:") ? it.companyKey : normalizeCompanyKey(it.company);
+    (byCompany[ck] ||= []).push(it);
+  }
+
+  const applications: EmailItem[][] = [];
+
+  for (const companyItems of Object.values(byCompany)) {
+    const withRole = companyItems.filter((it) => normalizeRoleKey(it.role));
+    const roleless = companyItems.filter((it) => !normalizeRoleKey(it.role));
+
+    // group role-bearing emails by canonical role
+    const canon = canonicalRoleGroups(withRole.map((it) => normalizeRoleKey(it.role)));
+    const groups: Record<string, EmailItem[]> = {};
+    for (const it of withRole) {
+      const g = canon.get(normalizeRoleKey(it.role)) || normalizeRoleKey(it.role);
+      (groups[g] ||= []).push(it);
+    }
+    const roleGroups = Object.values(groups);
+
+    if (roleGroups.length === 0) {
+      // no role info at all for this company → one application
+      if (companyItems.length > 0) applications.push(companyItems);
+    } else if (roleGroups.length === 1) {
+      // single application → all role-less follow-ups belong to it
+      roleGroups[0].push(...roleless);
+      applications.push(roleGroups[0]);
+    } else {
+      // multiple applications → attach each role-less email to the nearest by date
+      for (const rl of roleless) {
+        let best = roleGroups[0];
+        let bestDist = Infinity;
+        for (const g of roleGroups) {
+          const dist = Math.min(...g.map((e) => Math.abs(e.date - rl.date)));
+          if (dist < bestDist) { bestDist = dist; best = g; }
+        }
+        best.push(rl);
+      }
+      for (const g of roleGroups) applications.push(g);
+    }
+  }
+
+  return applications.map(buildRow);
 }
