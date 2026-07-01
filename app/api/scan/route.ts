@@ -116,8 +116,7 @@ export async function GET(req: NextRequest) {
     } while (pageToken && ids.length < MAX_MESSAGES);
     ids = ids.slice(0, MAX_MESSAGES);
 
-    // 2) which of these have we already SEEN (either stored as an application,
-    //    or recorded in the skip list as a promo/unidentifiable email)?
+    // 2) which of these have we already SEEN (stored as an application, or in the skip list)?
     const [existingEmails, skippedRows] = await Promise.all([
       prisma.email.findMany({ where: { userId: user.id, id: { in: ids } }, select: { id: true } }),
       prisma.skippedEmail.findMany({ where: { userId: user.id, messageId: { in: ids } }, select: { messageId: true } }),
@@ -158,7 +157,6 @@ export async function GET(req: NextRequest) {
       const subject = (headers.find((h: any) => h.name === "Subject") || {}).value || "";
       const date = parseInt(msg.internalDate, 10);
 
-      // personal/consumer sender → skip AND remember (don't reprocess next time)
       if (isPersonalSender(from)) { skipIds.push(msg.id); continue; }
 
       const info = extractCompany(from);
@@ -171,10 +169,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 5) AI: company + role + stage + promotional. Promos & unidentifiable → skip list.
+    // 5) AI: company + role + stage + promotional + reason. Promos & unidentifiable → skip list.
     type Final = {
       id: string; companyKey: string; company: string; role: string;
       sender: string; isAts: boolean; stage: Stage; subject: string; date: number;
+      summary: string | null;
     };
     const finals: Final[] = [];
 
@@ -186,7 +185,6 @@ export async function GET(req: NextRequest) {
         const p = batch[j];
         const r = ai[j];
 
-        // promotional / newsletter / job-alert → skip AND remember
         if (r && r.promotional) { skipIds.push(p.id); continue; }
 
         const stage: Stage = r ? r.stage : keywordStage(p.subject, p.body);
@@ -196,11 +194,12 @@ export async function GET(req: NextRequest) {
         let label: string, key: string;
         if (company) { label = company; key = company.toLowerCase(); }
         else if (role) { label = "(" + role + ")"; key = "role:" + role.toLowerCase(); }
-        else { skipIds.push(p.id); continue; } // nothing to identify it by → skip AND remember
+        else { skipIds.push(p.id); continue; }
 
         finals.push({
           id: p.id, companyKey: key, company: label, role,
           sender: p.sender, isAts: p.isAts, stage, subject: p.subject, date: p.date,
+          summary: r ? r.reason : null,
         });
       }
 
@@ -210,13 +209,13 @@ export async function GET(req: NextRequest) {
     }
     console.log(`Scan (${user.email}): stored ${finals.length}, skipped ${skipIds.length}`);
 
-    // 6a) save real applications (stage + derived status)
+    // 6a) save real applications (stage + derived status + reason summary)
     if (finals.length > 0) {
       await prisma.email.createMany({
         data: finals.map((f) => ({
           id: f.id, userId: user.id, companyKey: f.companyKey, company: f.company, role: f.role,
           sender: f.sender, isAts: f.isAts, stage: f.stage, status: stageToStatus(f.stage),
-          subject: f.subject, date: new Date(f.date),
+          subject: f.subject, date: new Date(f.date), summary: f.summary,
         })),
       });
     }
@@ -234,6 +233,7 @@ export async function GET(req: NextRequest) {
       allEmails.map((e) => ({
         companyKey: e.companyKey, company: e.company, role: e.role, sender: e.sender,
         isAts: e.isAts, status: e.status, stage: e.stage, date: e.date.getTime(), subject: e.subject,
+        summary: e.summary,
       }))
     );
 

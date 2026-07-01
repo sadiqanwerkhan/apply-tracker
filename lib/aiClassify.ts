@@ -1,17 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-// Claude model names are stable. If you ever get a "model not found" error,
-// change ONLY this line. Haiku is the fast, cheap model — ideal for classification.
 const MODEL = "claude-haiku-4-5-20251001";
 
 export type Stage =
-  | "applied"
-  | "screening"
-  | "assessment"
-  | "interview"
-  | "offer"
-  | "rejected"
-  | "update";
+  | "applied" | "screening" | "assessment" | "interview" | "offer" | "rejected" | "update";
 
 export type AiStatus = "Rejected" | "Advancing" | "Pending";
 
@@ -20,6 +12,7 @@ export type AiResult = {
   company: string | null;
   role: string | null;
   stage: Stage;
+  reason: string | null; // short "why", only for rejections
 };
 
 const VALID_STAGES: Stage[] = [
@@ -36,13 +29,12 @@ function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n) : s;
 }
 
-/** Map a hiring stage to the coarse status used by the filter pills. */
 export function stageToStatus(stage: Stage): AiStatus {
   if (stage === "rejected") return "Rejected";
   if (stage === "screening" || stage === "assessment" || stage === "interview" || stage === "offer") {
     return "Advancing";
   }
-  return "Pending"; // applied, update
+  return "Pending";
 }
 
 function coerceStage(v: unknown): Stage {
@@ -61,9 +53,8 @@ function cleanStr(v: unknown): string | null {
 
 /**
  * Analyze a batch of emails in ONE API call.
- * For each email returns { promotional, company, role, stage }, in order.
- * Returns null for an item (or all) if the response can't be parsed —
- * the caller then falls back to keyword/regex handling.
+ * Returns { promotional, company, role, stage, reason } per email, in order.
+ * null for an item (or all) if unparseable — caller falls back.
  */
 export async function aiClassifyBatch(
   emails: { subject: string; body: string }[]
@@ -77,10 +68,18 @@ export async function aiClassifyBatch(
 
   const prompt = `You are analyzing emails from a job seeker's inbox. For EACH email below, return a JSON object with these fields:
 
-- "promotional": true if the email is a newsletter, job alert, job digest, marketing/promotional email, or a job-board recommendation of jobs to apply to — i.e. NOT a response to a specific application this person actually submitted. false if it is a genuine application-related email (an application confirmation, a recruiter contacting them about a specific application, an interview invite, an assessment, a rejection, or an offer).
+- "promotional": true if the email is a newsletter, job alert, job digest, marketing/promotional email, or a job-board recommendation of jobs to apply to — i.e. NOT a response to a specific application this person actually submitted. false if it is a genuine application-related email (a confirmation, a recruiter contacting them about a specific application, an interview invite, an assessment, a rejection, or an offer).
 - "company": the name of the ACTUAL hiring company the email concerns. If the email comes from a job board (Indeed, LinkedIn, XING, StepStone, Glassdoor, Instaffo, etc.) but names the real employer, extract the REAL employer's name, not the platform's name. Use null if no specific employer can be determined.
 - "role": the specific job title/position the email is about (e.g. "Senior Frontend Engineer"). Use null if not determinable.
-- "stage": the hiring stage, exactly one of: "applied", "screening", "assessment", "interview", "offer", "rejected", "update". Use "update" if unclear.
+- "stage": the hiring stage. Be STRICT and conservative — when unsure, choose the EARLIER stage. Do not assume progress that the email does not explicitly show. Choose exactly one of:
+    - "applied": the email only acknowledges or confirms that an application was received (e.g. "thank you for applying", "we have received your application", "your application to join X", "thanks for your interest"). This is the default for any confirmation or acknowledgment, even a warm and friendly one. If the email does NOT clearly do something more advanced, use "applied".
+    - "screening": ONLY if the email explicitly invites the candidate to an initial recruiter/HR call or asks them to schedule/pick a time for an intro or phone conversation. A mere acknowledgment is NOT screening.
+    - "assessment": ONLY if the email asks the candidate to complete a specific coding test, take-home task, or online assessment.
+    - "interview": ONLY if the email explicitly invites the candidate to, or schedules, a technical, onsite, or final-round interview.
+    - "offer": ONLY if a job offer is actually being extended.
+    - "rejected": the company declined the application or is not moving forward with the candidate.
+    - "update": a genuine application-related email that does not fit any category above.
+- "reason": ONLY when stage is "rejected", a very short one-sentence summary of WHY the candidate was rejected, based strictly on what the email actually says. If the rejection gives no specific reason, use "No specific reason given". For every non-rejected email, use null.
 
 Return ONLY a JSON array of exactly ${emails.length} objects, one per email in order. No explanation, no other text.
 
@@ -89,7 +88,7 @@ ${list}`;
   try {
     const message = await getClient().messages.create({
       model: MODEL,
-      max_tokens: 2000,
+      max_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -105,11 +104,13 @@ ${list}`;
     return arr.map((o: unknown) => {
       if (o === null || typeof o !== "object") return null;
       const obj = o as Record<string, unknown>;
+      const stage = coerceStage(obj.stage);
       return {
         promotional: obj.promotional === true,
         company: cleanStr(obj.company),
         role: cleanStr(obj.role),
-        stage: coerceStage(obj.stage),
+        stage,
+        reason: stage === "rejected" ? cleanStr(obj.reason) : null,
       } as AiResult;
     });
   } catch (err) {
