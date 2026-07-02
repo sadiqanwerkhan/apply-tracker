@@ -8,6 +8,7 @@ import ApplicationsTable from "@/components/ApplicationsTable";
 import Pagination from "@/components/Pagination";
 import ExportControls from "@/components/ExportControls";
 import ScanningQuote from "@/components/ScanningQuote";
+import StatsSummary from "@/components/StatsSummary";
 
 type Props = {
   userEmail: string;
@@ -47,6 +48,8 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
           onEnd={app.setEndDate}
           onScan={app.runScan}
         />
+
+        {!busy && <StatsSummary rows={app.allRows} />}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
