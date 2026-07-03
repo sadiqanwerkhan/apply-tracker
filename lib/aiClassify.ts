@@ -12,7 +12,7 @@ export type AiResult = {
   company: string | null;
   role: string | null;
   stage: Stage;
-  reason: string | null; // short "why", only for rejections
+  reason: string | null;
 };
 
 const VALID_STAGES: Stage[] = [
@@ -51,11 +51,6 @@ function cleanStr(v: unknown): string | null {
   return s;
 }
 
-/**
- * Analyze a batch of emails in ONE API call.
- * Returns { promotional, company, role, stage, reason } per email, in order.
- * null for an item (or all) if unparseable — caller falls back.
- */
 export async function aiClassifyBatch(
   emails: { subject: string; body: string }[]
 ): Promise<(AiResult | null)[]> {
@@ -68,12 +63,12 @@ export async function aiClassifyBatch(
 
   const prompt = `You are analyzing emails from a job seeker's inbox. For EACH email below, return a JSON object with these fields:
 
-- "promotional": true if the email is a newsletter, job alert, job digest, marketing/promotional email, or a job-board recommendation of jobs to apply to — i.e. NOT a response to a specific application this person actually submitted. false if it is a genuine application-related email (a confirmation, a recruiter contacting them about a specific application, an interview invite, an assessment, a rejection, or an offer).
+- "promotional": true if the email is NOT a response to a specific job application this person submitted. This includes: newsletters, job alerts, job digests, marketing/promotional emails, job-board recommendations, AND service/system notifications (e.g. from GitHub, GitLab, Vercel, Google, Slack, cloud providers), AND privacy/legal/GDPR/consent/data-retention/compliance notifications. Set true for any of these. Set false ONLY for a genuine application-related email: an application confirmation, a recruiter contacting them about a specific application, an interview invite, an assessment, a rejection, or an offer.
 - "company": the name of the ACTUAL hiring company the email concerns. If the email comes from a job board (Indeed, LinkedIn, XING, StepStone, Glassdoor, Instaffo, etc.) but names the real employer, extract the REAL employer's name, not the platform's name. Use null if no specific employer can be determined.
 - "role": the specific job title/position the email is about (e.g. "Senior Frontend Engineer"). Use null if not determinable.
-- "stage": the hiring stage. Be STRICT and conservative — when unsure, choose the EARLIER stage. Do not assume progress that the email does not explicitly show. Choose exactly one of:
-    - "applied": the email only acknowledges or confirms that an application was received (e.g. "thank you for applying", "we have received your application", "your application to join X", "thanks for your interest"). This is the default for any confirmation or acknowledgment, even a warm and friendly one. If the email does NOT clearly do something more advanced, use "applied".
-    - "screening": ONLY if the email explicitly invites the candidate to an initial recruiter/HR call or asks them to schedule/pick a time for an intro or phone conversation. A mere acknowledgment is NOT screening.
+- "stage": the hiring stage. Be STRICT and conservative — when unsure, choose the EARLIER stage. Do not assume progress the email does not explicitly show. Choose exactly one of:
+    - "applied": the email only acknowledges or confirms that an application was received (e.g. "thank you for applying", "we have received your application", "your application to join X"). This is the default for any confirmation/acknowledgment, even a warm friendly one.
+    - "screening": ONLY if the email explicitly invites the candidate to an initial recruiter/HR call or asks them to schedule/pick a time for an intro or phone conversation.
     - "assessment": ONLY if the email asks the candidate to complete a specific coding test, take-home task, or online assessment.
     - "interview": ONLY if the email explicitly invites the candidate to, or schedules, a technical, onsite, or final-round interview.
     - "offer": ONLY if a job offer is actually being extended.
