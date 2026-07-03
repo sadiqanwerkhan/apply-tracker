@@ -10,12 +10,11 @@ export type EmailItem = {
   stage: string;
   date: number;
   subject: string;
-  summary: string | null; // AI "why" (only set on rejection emails)
+  summary: string | null;
 };
 
 type Event = { date: number; stage: string; subject: string; summary: string };
 
-// legal suffixes / noise that make the same company look different
 const SUFFIXES = [
   "gmbh", "ag", "se", "kg", "kgaa", "ohg", "ug", "mbh", "co",
   "inc", "incorporated", "ltd", "limited", "llc", "llp", "lp", "plc",
@@ -36,7 +35,10 @@ function normalizeCompanyKey(company: string): string {
   return s || (company || "").toLowerCase().trim();
 }
 
-// normalize a role into a grouping key: drop gender markers, parentheticals, punctuation
+// Normalize a role for grouping: strip gender markers, parentheticals, punctuation.
+// NOTE: we do NOT prefix-merge — "Full Stack Engineer" and "Full Stack Engineer - Billings"
+// are DIFFERENT roles and must stay separate. Two roles match only if their full
+// normalized text is identical.
 function normalizeRoleKey(role: string): string {
   let s = (role || "").toLowerCase();
   s = s.replace(/\(.*?\)/g, " "); // (all genders), (m/w/d), etc.
@@ -45,25 +47,6 @@ function normalizeRoleKey(role: string): string {
   return s;
 }
 
-/**
- * Merge role keys where one is a prefix of another (handles the same application
- * being worded with extra trailing words across different emails). Returns a map
- * from each role key to a canonical group key.
- */
-function canonicalRoleGroups(roleKeys: string[]): Map<string, string> {
-  const sorted = [...new Set(roleKeys)].sort((a, b) => a.length - b.length);
-  const canon = new Map<string, string>();
-  for (const key of sorted) {
-    let assigned: string | null = null;
-    for (const [existing, c] of canon) {
-      if (key === existing || key.startsWith(existing + " ")) { assigned = c; break; }
-    }
-    canon.set(key, assigned ?? key);
-  }
-  return canon;
-}
-
-// build one Row (one application) from a set of emails that belong together
 function buildRow(emails: EmailItem[]): Row {
   let company = emails[0].company;
   let companyLen = company.length;
@@ -136,11 +119,10 @@ function buildRow(emails: EmailItem[]): Row {
 }
 
 /**
- * Group emails into applications. An application is a (company + role) pair,
- * so two different roles at the same company become two separate rows.
+ * Group emails into applications. An application = (company + exact normalized role).
+ * Different roles at the same company are separate applications.
  */
 export function aggregateEmails(items: EmailItem[]): Row[] {
-  // 1) group by company
   const byCompany: Record<string, EmailItem[]> = {};
   for (const it of items) {
     const ck = it.companyKey.startsWith("role:") ? it.companyKey : normalizeCompanyKey(it.company);
@@ -153,24 +135,21 @@ export function aggregateEmails(items: EmailItem[]): Row[] {
     const withRole = companyItems.filter((it) => normalizeRoleKey(it.role));
     const roleless = companyItems.filter((it) => !normalizeRoleKey(it.role));
 
-    // group role-bearing emails by canonical role
-    const canon = canonicalRoleGroups(withRole.map((it) => normalizeRoleKey(it.role)));
+    // group role-bearing emails by EXACT normalized role (no prefix-merging)
     const groups: Record<string, EmailItem[]> = {};
     for (const it of withRole) {
-      const g = canon.get(normalizeRoleKey(it.role)) || normalizeRoleKey(it.role);
-      (groups[g] ||= []).push(it);
+      const key = normalizeRoleKey(it.role);
+      (groups[key] ||= []).push(it);
     }
     const roleGroups = Object.values(groups);
 
     if (roleGroups.length === 0) {
-      // no role info at all for this company → one application
       if (companyItems.length > 0) applications.push(companyItems);
     } else if (roleGroups.length === 1) {
-      // single application → all role-less follow-ups belong to it
       roleGroups[0].push(...roleless);
       applications.push(roleGroups[0]);
     } else {
-      // multiple applications → attach each role-less email to the nearest by date
+      // multiple distinct roles → attach each role-less email to the nearest by date
       for (const rl of roleless) {
         let best = roleGroups[0];
         let bestDist = Infinity;

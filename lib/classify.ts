@@ -145,14 +145,39 @@ const PERSONAL_DOMAINS = [
   "mail.com", "yandex.com", "yandex.ru", "zoho.com", "tutanota.com", "tuta.io",
 ];
 
+// ---- service / notification domains that are never job applications ----
+const SERVICE_DOMAINS = [
+  // dev / code platforms
+  "github.com", "gitlab.com", "bitbucket.org",
+  // hosting / infra
+  "vercel.com", "netlify.com", "render.com", "railway.app", "heroku.com",
+  "neon.tech", "supabase.io", "supabase.com",
+  // Google services / system notifications
+  "notifications.google.com", "google.com", "accounts.google.com",
+  // collaboration / SaaS
+  "slack.com", "notion.so", "atlassian.net", "trello.com",
+  // cloud providers
+  "aws.amazon.com", "amazonaws.com", "digitalocean.com", "cloudflare.com",
+  // payments / packages
+  "stripe.com", "paypal.com", "npmjs.com",
+];
+
+function domainOf(from: string): string {
+  const m = from.match(/<(.+?)>/);
+  const email = (m ? m[1] : from).trim().toLowerCase();
+  return email.split("@")[1] || "";
+}
+
 /**
- * True if the sender is a personal/consumer email address (Gmail, Outlook, etc.),
- * which we treat as personal correspondence rather than a recruiter/company.
+ * True if the sender is a personal/consumer email address (Gmail, Outlook, etc.)
+ * OR a service/notification domain (GitHub, Vercel, Google, etc.) — none of which
+ * are recruiters. Such emails are skipped and never treated as job applications.
  */
 export function isPersonalSender(from: string): boolean {
   if (!from) return false;
-  const m = from.match(/<(.+?)>/);
-  const email = (m ? m[1] : from).trim().toLowerCase();
-  const domain = email.split("@")[1] || "";
-  return PERSONAL_DOMAINS.includes(domain);
+  const domain = domainOf(from);
+  if (!domain) return false;
+  if (PERSONAL_DOMAINS.includes(domain)) return true;
+  // match service domains as exact or subdomain (e.g. notifications.github.com)
+  return SERVICE_DOMAINS.some((d) => domain === d || domain.endsWith("." + d));
 }
