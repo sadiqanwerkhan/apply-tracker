@@ -25,15 +25,15 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
       : "No applications match your filters.";
 
   return (
-    <main className="min-h-screen bg-gray-50 py-10 px-4">
+    <main className="min-h-screen bg-gray-50 py-6 px-3 sm:py-10 sm:px-4">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Apply Tracker</h1>
-            <p className="text-gray-500 mt-1">Signed in as {userEmail}</p>
+        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Apply Tracker</h1>
+            <p className="text-gray-500 mt-1 text-sm break-words">Signed in as {userEmail}</p>
           </div>
           <form action={onSignOut}>
-            <button type="submit" className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
+            <button type="submit" className="text-sm text-gray-400 hover:text-gray-600 shrink-0">Sign out</button>
           </form>
         </div>
 
@@ -49,8 +49,8 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
 
         {!busy && <StatsSummary rows={app.allRows} />}
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
             <FilterPills active={app.statusFilter} counts={app.counts} scanning={busy} onChange={app.setStatusFilter} />
             {!busy && (
               <ExportControls allRows={app.allRows} visibleRows={app.filtered} statusFilter={app.statusFilter} search={app.search} />
