@@ -8,7 +8,11 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
 
   try {
-    const emails = await prisma.email.findMany({ where: { userId: user.id } });
+    const [emails, manualOutcomes] = await Promise.all([
+      prisma.email.findMany({ where: { userId: user.id } }),
+      prisma.manualOutcome.findMany({ where: { userId: user.id } }),
+    ]);
+
     const rows = aggregateEmails(
       emails.map((e) => ({
         companyKey: e.companyKey,
@@ -21,8 +25,17 @@ export async function GET() {
         date: e.date.getTime(),
         subject: e.subject,
         summary: e.summary,
+      })),
+      manualOutcomes.map((m) => ({
+        companyKey: m.companyKey,
+        roleKey: m.roleKey,
+        status: m.status,
+        channel: m.channel,
+        reason: m.reason,
+        date: m.date.getTime(),
       }))
     );
+
     return NextResponse.json({ rows });
   } catch (err) {
     console.error("Load applications error:", err);
