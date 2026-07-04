@@ -29,30 +29,180 @@ function dotClasses(stage: string) {
   return "bg-gray-400";
 }
 
-function Timeline({ row }: { row: Row }) {
-  if (!row.timeline || row.timeline.length === 0) {
-    return <p className="text-sm text-gray-400 px-6 py-4">No timeline details available.</p>;
+const CHANNELS = ["LinkedIn", "WhatsApp", "Phone", "Indeed", "Email", "Other"];
+
+function OutcomeForm({ row }: { row: Row }) {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<"Rejected" | "Advancing">("Rejected");
+  const [channel, setChannel] = useState("LinkedIn");
+  const [reason, setReason] = useState("");
+  const [date, setDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/manual-outcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: row.company,
+          role: row.role,
+          status,
+          channel,
+          reason: reason || undefined,
+          date: date || undefined,
+        }),
+      });
+      if (res.ok) window.location.reload();
+      else { setSaving(false); alert("Could not save the outcome. Please try again."); }
+    } catch {
+      setSaving(false);
+      alert("Could not save the outcome. Please try again.");
+    }
   }
+
+  async function remove() {
+    if (!window.confirm("Remove the manually recorded outcome for this application?")) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/manual-outcome", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: row.company, role: row.role }),
+      });
+      if (res.ok) window.location.reload();
+      else setSaving(false);
+    } catch {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-200">
+      {row.manual ? (
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-sm text-gray-600">
+            ✔ Outcome recorded manually via <strong>{row.manualChannel}</strong>
+          </span>
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="text-xs text-indigo-600 hover:underline"
+            disabled={saving}
+          >
+            Change
+          </button>
+          <button
+            onClick={remove}
+            className="text-xs text-red-500 hover:underline"
+            disabled={saving}
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        !open && (
+          <button
+            onClick={() => setOpen(true)}
+            className="text-sm text-indigo-600 hover:underline"
+          >
+            + Record an outcome from another channel
+          </button>
+        )
+      )}
+
+      {open && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 max-w-2xl">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Outcome</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as "Rejected" | "Advancing")}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              <option value="Rejected">Rejected</option>
+              <option value="Advancing">Moved forward</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Channel</label>
+            <select
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              {CHANNELS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date (optional)</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Reason (optional)</label>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Went with a more senior candidate"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="sm:col-span-2 flex gap-2">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+            >
+              {saving ? "Saving…" : "Save outcome"}
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              disabled={saving}
+              className="text-sm text-gray-500 px-3 py-2"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Timeline({ row }: { row: Row }) {
   return (
     <div className="px-6 py-5 bg-gray-50">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-4">Application timeline</p>
-      <ol className="relative border-l-2 border-gray-200 ml-2">
-        {row.timeline.map((e, idx) => (
-          <li key={idx} className="mb-5 last:mb-0 ml-6">
-            <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-white ${dotClasses(e.stage)}`} />
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-semibold text-gray-800">{STAGE_LABELS[e.stage] || "Update"}</span>
-              <span className="text-xs text-gray-400">{e.date}</span>
-            </div>
-            {e.subject && <p className="text-sm text-gray-500 mt-1">{e.subject}</p>}
-            {e.stage === "rejected" && e.reason && (
-              <p className="text-sm text-red-600 mt-1.5">
-                <span className="font-medium">Why:</span> {e.reason}
-              </p>
-            )}
-          </li>
-        ))}
-      </ol>
+      {row.timeline && row.timeline.length > 0 ? (
+        <ol className="relative border-l-2 border-gray-200 ml-2">
+          {row.timeline.map((e, idx) => (
+            <li key={idx} className="mb-5 last:mb-0 ml-6">
+              <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-white ${dotClasses(e.stage)}`} />
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-semibold text-gray-800">{e.label || STAGE_LABELS[e.stage] || "Update"}</span>
+                <span className="text-xs text-gray-400">{e.date}</span>
+              </div>
+              {e.subject && <p className="text-sm text-gray-500 mt-1">{e.subject}</p>}
+              {e.reason && (
+                <p className="text-sm text-red-600 mt-1.5">
+                  <span className="font-medium">Why:</span> {e.reason}
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-gray-400">No timeline details available.</p>
+      )}
+      <OutcomeForm row={row} />
     </div>
   );
 }

@@ -13,6 +13,16 @@ export type EmailItem = {
   summary: string | null; // AI "why" (only set on rejection emails)
 };
 
+// A manually-recorded outcome (rejection/advance that arrived off-channel).
+export type ManualOutcomeItem = {
+  companyKey: string;
+  roleKey: string;
+  status: string;    // "Rejected" | "Advancing"
+  channel: string;
+  reason: string | null;
+  date: number;      // epoch ms
+};
+
 type Event = { date: number; stage: string; subject: string; summary: string };
 
 // legal suffixes / noise that make the same company look different
@@ -22,13 +32,12 @@ const SUFFIXES = [
   "corp", "corporation", "company", "group", "holding", "holdings",
   "technologies", "technology", "tech", "solutions", "software", "labs",
   "international", "global", "digital", "ventures", "studios", "studio",
-  // country / region words that appear as trailing noise on a company name
-  // (e.g. "Recare Deutschland" == "Recare")
-  "deutschland", "germany", "gmbh", "europe", "eu", "usa", "uk", "america",
+  // country / region words that appear as trailing noise (e.g. "Recare Deutschland" == "Recare")
+  "deutschland", "germany", "europe", "eu", "usa", "uk", "america",
   "österreich", "austria", "schweiz", "switzerland", "nordics", "dach",
 ];
 
-function normalizeCompanyKey(company: string): string {
+export function normalizeCompanyKey(company: string): string {
   let s = (company || "").toLowerCase().trim();
   s = s.replace(/\(.*?\)/g, " ");
   s = s.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -40,34 +49,15 @@ function normalizeCompanyKey(company: string): string {
   return s || (company || "").toLowerCase().trim();
 }
 
-// normalize a role into a grouping key: drop gender markers, parentheticals, punctuation
-function normalizeRoleKey(role: string): string {
+// Two roles match only if their full normalized text is identical (NO prefix-merge).
+export function normalizeRoleKey(role: string): string {
   let s = (role || "").toLowerCase();
-  s = s.replace(/\(.*?\)/g, " "); // (all genders), (m/w/d), etc.
+  s = s.replace(/\(.*?\)/g, " ");
   s = s.replace(/\b(all genders|m\/w\/d|m\/f\/d|f\/m\/d|w\/m\/d|m\/w\/x|d\/m\/w|gn|div)\b/gi, " ");
   s = s.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   return s;
 }
 
-/**
- * Merge role keys where one is a prefix of another (handles the same application
- * being worded with extra trailing words across different emails). Returns a map
- * from each role key to a canonical group key.
- */
-function canonicalRoleGroups(roleKeys: string[]): Map<string, string> {
-  const sorted = [...new Set(roleKeys)].sort((a, b) => a.length - b.length);
-  const canon = new Map<string, string>();
-  for (const key of sorted) {
-    let assigned: string | null = null;
-    for (const [existing, c] of canon) {
-      if (key === existing || key.startsWith(existing + " ")) { assigned = c; break; }
-    }
-    canon.set(key, assigned ?? key);
-  }
-  return canon;
-}
-
-// build one Row (one application) from a set of emails that belong together
 function buildRow(emails: EmailItem[]): Row {
   let company = emails[0].company;
   let companyLen = company.length;
@@ -136,15 +126,12 @@ function buildRow(emails: EmailItem[]): Row {
     currentStage,
     timeline,
     rejectionReason: status === "Rejected" ? rejectSummary : "",
+    manual: false,
+    manualChannel: "",
   };
 }
 
-/**
- * Group emails into applications. An application is a (company + role) pair,
- * so two different roles at the same company become two separate rows.
- */
-export function aggregateEmails(items: EmailItem[]): Row[] {
-  // 1) group by company
+export function aggregateEmails(items: EmailItem[], manual: ManualOutcomeItem[] = []): Row[] {
   const byCompany: Record<string, EmailItem[]> = {};
   for (const it of items) {
     const ck = it.companyKey.startsWith("role:") ? it.companyKey : normalizeCompanyKey(it.company);
@@ -157,24 +144,19 @@ export function aggregateEmails(items: EmailItem[]): Row[] {
     const withRole = companyItems.filter((it) => normalizeRoleKey(it.role));
     const roleless = companyItems.filter((it) => !normalizeRoleKey(it.role));
 
-    // group role-bearing emails by canonical role
-    const canon = canonicalRoleGroups(withRole.map((it) => normalizeRoleKey(it.role)));
     const groups: Record<string, EmailItem[]> = {};
     for (const it of withRole) {
-      const g = canon.get(normalizeRoleKey(it.role)) || normalizeRoleKey(it.role);
-      (groups[g] ||= []).push(it);
+      const key = normalizeRoleKey(it.role);
+      (groups[key] ||= []).push(it);
     }
     const roleGroups = Object.values(groups);
 
     if (roleGroups.length === 0) {
-      // no role info at all for this company → one application
       if (companyItems.length > 0) applications.push(companyItems);
     } else if (roleGroups.length === 1) {
-      // single application → all role-less follow-ups belong to it
       roleGroups[0].push(...roleless);
       applications.push(roleGroups[0]);
     } else {
-      // multiple applications → attach each role-less email to the nearest by date
       for (const rl of roleless) {
         let best = roleGroups[0];
         let bestDist = Infinity;
@@ -188,5 +170,36 @@ export function aggregateEmails(items: EmailItem[]): Row[] {
     }
   }
 
-  return applications.map(buildRow);
+  const rows = applications.map(buildRow);
+
+  if (manual.length > 0) {
+    const map = new Map<string, ManualOutcomeItem>();
+    for (const m of manual) map.set(`${m.companyKey}::${m.roleKey}`, m);
+
+    for (const row of rows) {
+      const key = `${normalizeCompanyKey(row.company)}::${normalizeRoleKey(row.role)}`;
+      const m = map.get(key);
+      if (!m) continue;
+
+      row.status = m.status === "Advancing" ? "Advancing" : "Rejected";
+      row.manual = true;
+      row.manualChannel = m.channel;
+
+      const dateStr = new Date(m.date).toISOString().slice(0, 10);
+      const entry: TimelineEntry = {
+        date: dateStr,
+        stage: row.status === "Rejected" ? "rejected" : "interview",
+        subject: `Recorded manually via ${m.channel}`,
+        reason: m.reason || undefined,
+        label: row.status === "Rejected" ? "Rejected" : "Moved forward",
+      };
+      const tl = [...row.timeline, entry].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      row.timeline = tl;
+      row.currentStage = tl[tl.length - 1].stage;
+      if (row.status === "Rejected") row.rejectionReason = m.reason || "";
+      if (dateStr > row.lastSeen) row.lastSeen = dateStr;
+    }
+  }
+
+  return rows;
 }

@@ -1,8 +1,9 @@
 export type TimelineEntry = {
-  date: string;    // ISO yyyy-mm-dd, when this stage was first reached
-  stage: string;   // stage key
+  date: string;
+  stage: string;
   subject: string;
-  reason?: string; // short "why" (only meaningful on a rejected entry)
+  reason?: string;
+  label?: string; // custom label override (used for manual outcomes)
 };
 
 export type Row = {
@@ -14,14 +15,15 @@ export type Row = {
   firstSeen: string;
   lastSeen: string;
   note: string;
-  currentStage: string;       // latest stage key (collapsed row)
-  timeline: TimelineEntry[];  // ordered journey (expandable view)
-  rejectionReason: string;    // AI "why" summary, when rejected
+  currentStage: string;
+  timeline: TimelineEntry[];
+  rejectionReason: string;
+  manual: boolean;        // true if a manual outcome has been applied
+  manualChannel: string;  // channel of the manual outcome, if any
 };
 
 export type StatusFilter = "All" | "Advancing" | "Pending" | "Rejected";
 
-// Human-readable labels for stage keys, shared by aggregation and the UI.
 export const STAGE_LABELS: Record<string, string> = {
   applied: "Applied",
   screening: "Phone screen",

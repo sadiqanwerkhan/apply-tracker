@@ -83,3 +83,20 @@ model SkippedEmail {
   @@id([userId, messageId])
   @@index([userId])
 }
+
+model ManualOutcome {
+  id         String   @id @default(cuid())
+  userId     String
+  companyKey String
+  roleKey    String
+  company    String
+  role       String
+  status     String
+  channel    String
+  reason     String?
+  date       DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, companyKey, roleKey])
+  @@index([userId])
+}
