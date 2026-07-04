@@ -5,6 +5,7 @@ import { Row, STAGE_LABELS } from "@/lib/types";
 
 type Props = {
   items: Row[];
+  allRows: Row[];
   scanning: boolean;
   emptyMessage?: string;
 };
@@ -31,7 +32,160 @@ function dotClasses(stage: string) {
 
 const CHANNELS = ["LinkedIn", "WhatsApp", "Phone", "Indeed", "Email", "Other"];
 
-function OutcomeForm({ row }: { row: Row }) {
+// --- small inline icons (no icon library needed) ---
+function LinkIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+function EditIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
+    </svg>
+  );
+}
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+const btnSecondary =
+  "inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-gray-100 transition";
+const btnGhost = "text-xs text-gray-500 hover:text-gray-800 transition";
+
+function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
+  const [mode, setMode] = useState<"idle" | "picking" | "naming">("idle");
+  const [picked, setPicked] = useState<Row | null>(null);
+  const [q, setQ] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const candidates = allRows.filter(
+    (r) =>
+      !(r.company === row.company && r.role === row.role) &&
+      (`${r.company} ${r.role}`).toLowerCase().includes(q.toLowerCase())
+  );
+
+  async function doMerge(primary: Row, other: Row) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          primaryCompany: primary.company,
+          primaryRole: primary.role,
+          otherCompany: other.company,
+          otherRole: other.role,
+        }),
+      });
+      if (res.ok) window.location.reload();
+      else { setSaving(false); alert("Could not merge. Please try again."); }
+    } catch { setSaving(false); alert("Could not merge. Please try again."); }
+  }
+
+  async function unmerge() {
+    if (!window.confirm("Split this merged application back into separate applications?")) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/merge", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: row.company, role: row.role }),
+      });
+      if (res.ok) window.location.reload();
+      else setSaving(false);
+    } catch { setSaving(false); }
+  }
+
+  if (row.merged) {
+    return (
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 rounded-full px-3 py-1 text-xs font-medium">
+          <LinkIcon /> Merged with {row.mergedWith.join(", ")}
+        </span>
+        <button onClick={unmerge} disabled={saving} className={btnGhost}>Unmerge</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {mode === "idle" && (
+        <button onClick={() => setMode("picking")} className={btnSecondary}>
+          <LinkIcon /> Merge with another
+        </button>
+      )}
+
+      {mode === "picking" && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 max-w-xl">
+          <p className="text-sm font-medium text-gray-800 mb-1">Which application is the same as this one?</p>
+          <p className="text-xs text-gray-500 mb-3">Useful when a recruiter and the company both emailed you about the same role.</p>
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search company or role…"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            autoFocus
+          />
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-100">
+            {candidates.length === 0 ? (
+              <p className="text-sm text-gray-400 px-3 py-3">No other applications match.</p>
+            ) : (
+              candidates.map((c, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setPicked(c); setMode("naming"); }}
+                  className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition"
+                >
+                  <span className="text-sm font-medium text-gray-800">{c.company}</span>
+                  {c.role && <span className="text-sm text-gray-500"> — {c.role}</span>}
+                </button>
+              ))
+            )}
+          </div>
+          <button onClick={() => { setMode("idle"); setQ(""); }} className={`${btnGhost} mt-3`}>Cancel</button>
+        </div>
+      )}
+
+      {mode === "naming" && picked && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 max-w-xl">
+          <p className="text-sm font-medium text-gray-800 mb-1">Which name should the merged application show?</p>
+          <p className="text-xs text-gray-500 mb-3">Pick the real company (usually not the recruiter).</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              onClick={() => doMerge(row, picked)}
+              disabled={saving}
+              className="text-left rounded-lg border-2 border-gray-200 hover:border-indigo-400 px-4 py-3 transition disabled:opacity-60"
+            >
+              <span className="block text-sm font-semibold text-gray-800">{row.company}</span>
+              {row.role && <span className="block text-xs text-gray-500 mt-0.5">{row.role}</span>}
+            </button>
+            <button
+              onClick={() => doMerge(picked, row)}
+              disabled={saving}
+              className="text-left rounded-lg border-2 border-gray-200 hover:border-indigo-400 px-4 py-3 transition disabled:opacity-60"
+            >
+              <span className="block text-sm font-semibold text-gray-800">{picked.company}</span>
+              {picked.role && <span className="block text-xs text-gray-500 mt-0.5">{picked.role}</span>}
+            </button>
+          </div>
+          <button onClick={() => { setMode("picking"); setPicked(null); }} className={`${btnGhost} mt-3`}>Back</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OutcomeControl({ row }: { row: Row }) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<"Rejected" | "Advancing">("Rejected");
   const [channel, setChannel] = useState("LinkedIn");
@@ -45,21 +199,11 @@ function OutcomeForm({ row }: { row: Row }) {
       const res = await fetch("/api/manual-outcome", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          company: row.company,
-          role: row.role,
-          status,
-          channel,
-          reason: reason || undefined,
-          date: date || undefined,
-        }),
+        body: JSON.stringify({ company: row.company, role: row.role, status, channel, reason: reason || undefined, date: date || undefined }),
       });
       if (res.ok) window.location.reload();
       else { setSaving(false); alert("Could not save the outcome. Please try again."); }
-    } catch {
-      setSaving(false);
-      alert("Could not save the outcome. Please try again.");
-    }
+    } catch { setSaving(false); alert("Could not save the outcome. Please try again."); }
   }
 
   async function remove() {
@@ -73,103 +217,59 @@ function OutcomeForm({ row }: { row: Row }) {
       });
       if (res.ok) window.location.reload();
       else setSaving(false);
-    } catch {
-      setSaving(false);
-    }
+    } catch { setSaving(false); }
   }
 
   return (
-    <div className="mt-4 pt-4 border-t border-gray-200">
+    <div>
       {row.manual ? (
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm text-gray-600">
-            ✔ Outcome recorded manually via <strong>{row.manualChannel}</strong>
+          <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 rounded-full px-3 py-1 text-xs font-medium">
+            <CheckIcon /> Outcome recorded via {row.manualChannel}
           </span>
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="text-xs text-indigo-600 hover:underline"
-            disabled={saving}
-          >
-            Change
-          </button>
-          <button
-            onClick={remove}
-            className="text-xs text-red-500 hover:underline"
-            disabled={saving}
-          >
-            Remove
-          </button>
+          <button onClick={() => setOpen((o) => !o)} disabled={saving} className={btnGhost}>Change</button>
+          <button onClick={remove} disabled={saving} className={`${btnGhost} hover:text-red-600`}>Remove</button>
         </div>
       ) : (
         !open && (
-          <button
-            onClick={() => setOpen(true)}
-            className="text-sm text-indigo-600 hover:underline"
-          >
-            + Record an outcome from another channel
+          <button onClick={() => setOpen(true)} className={btnSecondary}>
+            <EditIcon /> Record outcome
           </button>
         )
       )}
 
       {open && (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 max-w-2xl">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Outcome</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as "Rejected" | "Advancing")}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="Rejected">Rejected</option>
-              <option value="Advancing">Moved forward</option>
-            </select>
+        <div className="mt-3 rounded-xl border border-gray-200 bg-white p-4 max-w-2xl">
+          <p className="text-sm font-medium text-gray-800 mb-1">Record an outcome from another channel</p>
+          <p className="text-xs text-gray-500 mb-3">For results that came by WhatsApp, LinkedIn, phone, etc. — not email.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Outcome</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as "Rejected" | "Advancing")} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="Rejected">Rejected</option>
+                <option value="Advancing">Moved forward</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Channel</label>
+              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Date (optional)</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Reason (optional)</label>
+              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Went with a more senior candidate" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Channel</label>
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            >
-              {CHANNELS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Date (optional)</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Reason (optional)</label>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Went with a more senior candidate"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="sm:col-span-2 flex gap-2">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
-            >
+          <div className="flex gap-2 mt-3">
+            <button onClick={save} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">
               {saving ? "Saving…" : "Save outcome"}
             </button>
-            <button
-              onClick={() => setOpen(false)}
-              disabled={saving}
-              className="text-sm text-gray-500 px-3 py-2"
-            >
-              Cancel
-            </button>
+            <button onClick={() => setOpen(false)} disabled={saving} className="text-sm text-gray-500 px-3 py-2">Cancel</button>
           </div>
         </div>
       )}
@@ -177,7 +277,7 @@ function OutcomeForm({ row }: { row: Row }) {
   );
 }
 
-function Timeline({ row }: { row: Row }) {
+function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
   return (
     <div className="px-6 py-5 bg-gray-50">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-4">Application timeline</p>
@@ -191,18 +291,19 @@ function Timeline({ row }: { row: Row }) {
                 <span className="text-xs text-gray-400">{e.date}</span>
               </div>
               {e.subject && <p className="text-sm text-gray-500 mt-1">{e.subject}</p>}
-              {e.reason && (
-                <p className="text-sm text-red-600 mt-1.5">
-                  <span className="font-medium">Why:</span> {e.reason}
-                </p>
-              )}
+              {e.reason && <p className="text-sm text-red-600 mt-1.5"><span className="font-medium">Why:</span> {e.reason}</p>}
             </li>
           ))}
         </ol>
       ) : (
         <p className="text-sm text-gray-400">No timeline details available.</p>
       )}
-      <OutcomeForm row={row} />
+
+      {/* actions bar */}
+      <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-3">
+        <MergeControl row={row} allRows={allRows} />
+        <OutcomeControl row={row} />
+      </div>
     </div>
   );
 }
@@ -224,7 +325,7 @@ function SkeletonRows() {
   );
 }
 
-export default function ApplicationsTable({ items, scanning, emptyMessage = "No applications match your filters." }: Props) {
+export default function ApplicationsTable({ items, allRows, scanning, emptyMessage = "No applications match your filters." }: Props) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
   return (
@@ -248,21 +349,17 @@ export default function ApplicationsTable({ items, scanning, emptyMessage = "No 
               const isOpen = expanded === i;
               return (
                 <Fragment key={i}>
-                  <tr
-                    onClick={() => setExpanded(isOpen ? null : i)}
-                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
-                  >
+                  <tr onClick={() => setExpanded(isOpen ? null : i)} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer">
                     <td className="py-3 px-3 font-medium text-gray-900">
                       <span className="inline-flex items-center gap-2">
                         <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
                         {r.company}
+                        {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-gray-600">{r.role || "—"}</td>
                     <td className="py-3 px-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(r.status)}`}>
-                        {r.status}
-                      </span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(r.status)}`}>{r.status}</span>
                     </td>
                     <td className="py-3 px-3 text-gray-500">{r.firstSeen}</td>
                     <td className="py-3 px-3 text-gray-500">{r.lastSeen}</td>
@@ -275,7 +372,7 @@ export default function ApplicationsTable({ items, scanning, emptyMessage = "No 
                   {isOpen && (
                     <tr>
                       <td colSpan={6} className="p-0 border-b border-gray-100">
-                        <Timeline row={r} />
+                        <Timeline row={r} allRows={allRows} />
                       </td>
                     </tr>
                   )}
@@ -285,9 +382,7 @@ export default function ApplicationsTable({ items, scanning, emptyMessage = "No 
           )}
         </tbody>
       </table>
-      {!scanning && items.length === 0 && (
-        <p className="text-center text-gray-400 py-8">{emptyMessage}</p>
-      )}
+      {!scanning && items.length === 0 && <p className="text-center text-gray-400 py-8">{emptyMessage}</p>}
     </div>
   );
 }

@@ -100,3 +100,18 @@ model ManualOutcome {
   @@unique([userId, companyKey, roleKey])
   @@index([userId])
 }
+
+model AppMerge {
+  id         String   @id @default(cuid())
+  userId     String
+  groupId    String
+  companyKey String
+  roleKey    String
+  company    String
+  role       String
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, companyKey, roleKey])
+  @@index([userId, groupId])
+}

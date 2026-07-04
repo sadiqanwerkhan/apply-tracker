@@ -33,9 +33,7 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
             <p className="text-gray-500 mt-1">Signed in as {userEmail}</p>
           </div>
           <form action={onSignOut}>
-            <button type="submit" className="text-sm text-gray-400 hover:text-gray-600">
-              Sign out
-            </button>
+            <button type="submit" className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
           </form>
         </div>
 
@@ -53,31 +51,15 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
-            <FilterPills
-              active={app.statusFilter}
-              counts={app.counts}
-              scanning={busy}
-              onChange={app.setStatusFilter}
-            />
+            <FilterPills active={app.statusFilter} counts={app.counts} scanning={busy} onChange={app.setStatusFilter} />
             {!busy && (
-              <ExportControls
-                allRows={app.allRows}
-                visibleRows={app.filtered}
-                statusFilter={app.statusFilter}
-                search={app.search}
-              />
+              <ExportControls allRows={app.allRows} visibleRows={app.filtered} statusFilter={app.statusFilter} search={app.search} />
             )}
           </div>
 
-          <SearchSort
-            search={app.search}
-            sortBy={app.sortBy}
-            scanning={busy}
-            onSearch={app.setSearch}
-            onSort={app.setSortBy}
-          />
+          <SearchSort search={app.search} sortBy={app.sortBy} scanning={busy} onSearch={app.setSearch} onSort={app.setSortBy} />
           {app.scanning && <ScanningQuote />}
-          <ApplicationsTable items={app.pageItems} scanning={busy} emptyMessage={emptyMessage} />
+          <ApplicationsTable items={app.pageItems} allRows={app.allRows} scanning={busy} emptyMessage={emptyMessage} />
           {!busy && <Pagination page={app.page} totalPages={app.totalPages} onChange={app.setPage} />}
         </div>
       </div>

@@ -3,7 +3,7 @@ export type TimelineEntry = {
   stage: string;
   subject: string;
   reason?: string;
-  label?: string; // custom label override (used for manual outcomes)
+  label?: string;
 };
 
 export type Row = {
@@ -18,8 +18,10 @@ export type Row = {
   currentStage: string;
   timeline: TimelineEntry[];
   rejectionReason: string;
-  manual: boolean;        // true if a manual outcome has been applied
-  manualChannel: string;  // channel of the manual outcome, if any
+  manual: boolean;
+  manualChannel: string;
+  merged: boolean;         // true if this row is a merge of multiple applications
+  mergedWith: string[];    // names of the other applications merged in
 };
 
 export type StatusFilter = "All" | "Advancing" | "Pending" | "Rejected";
