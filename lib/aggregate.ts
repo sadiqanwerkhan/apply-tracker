@@ -10,29 +10,35 @@ export type EmailItem = {
   stage: string;
   date: number;
   subject: string;
-  summary: string | null; // AI "why" (only set on rejection emails)
+  summary: string | null;
 };
 
-// A manually-recorded outcome (rejection/advance that arrived off-channel).
 export type ManualOutcomeItem = {
   companyKey: string;
   roleKey: string;
-  status: string;    // "Rejected" | "Advancing"
+  status: string;
   channel: string;
   reason: string | null;
-  date: number;      // epoch ms
+  date: number;
+};
+
+export type MergeItem = {
+  companyKey: string;
+  roleKey: string;
+  groupId: string;
+  isPrimary: boolean;
+  company: string;
+  role: string;
 };
 
 type Event = { date: number; stage: string; subject: string; summary: string };
 
-// legal suffixes / noise that make the same company look different
 const SUFFIXES = [
   "gmbh", "ag", "se", "kg", "kgaa", "ohg", "ug", "mbh", "co",
   "inc", "incorporated", "ltd", "limited", "llc", "llp", "lp", "plc",
   "corp", "corporation", "company", "group", "holding", "holdings",
   "technologies", "technology", "tech", "solutions", "software", "labs",
   "international", "global", "digital", "ventures", "studios", "studio",
-  // country / region words that appear as trailing noise (e.g. "Recare Deutschland" == "Recare")
   "deutschland", "germany", "europe", "eu", "usa", "uk", "america",
   "österreich", "austria", "schweiz", "switzerland", "nordics", "dach",
 ];
@@ -49,7 +55,6 @@ export function normalizeCompanyKey(company: string): string {
   return s || (company || "").toLowerCase().trim();
 }
 
-// Two roles match only if their full normalized text is identical (NO prefix-merge).
 export function normalizeRoleKey(role: string): string {
   let s = (role || "").toLowerCase();
   s = s.replace(/\(.*?\)/g, " ");
@@ -128,63 +133,120 @@ function buildRow(emails: EmailItem[]): Row {
     rejectionReason: status === "Rejected" ? rejectSummary : "",
     manual: false,
     manualChannel: "",
+    merged: false,
+    mergedWith: [],
   };
 }
 
-export function aggregateEmails(items: EmailItem[], manual: ManualOutcomeItem[] = []): Row[] {
+type FinalApp = {
+  emails: EmailItem[];
+  displayCompany: string | null;
+  displayRole: string | null;
+  memberKeys: string[];
+  merged: boolean;
+  mergedWith: string[];
+};
+
+export function aggregateEmails(
+  items: EmailItem[],
+  manual: ManualOutcomeItem[] = [],
+  merges: MergeItem[] = []
+): Row[] {
   const byCompany: Record<string, EmailItem[]> = {};
   for (const it of items) {
     const ck = it.companyKey.startsWith("role:") ? it.companyKey : normalizeCompanyKey(it.company);
     (byCompany[ck] ||= []).push(it);
   }
 
-  const applications: EmailItem[][] = [];
-
-  for (const companyItems of Object.values(byCompany)) {
+  const apps: { ck: string; roleKey: string; emails: EmailItem[] }[] = [];
+  for (const [ck, companyItems] of Object.entries(byCompany)) {
     const withRole = companyItems.filter((it) => normalizeRoleKey(it.role));
     const roleless = companyItems.filter((it) => !normalizeRoleKey(it.role));
-
     const groups: Record<string, EmailItem[]> = {};
     for (const it of withRole) {
-      const key = normalizeRoleKey(it.role);
-      (groups[key] ||= []).push(it);
+      const rk = normalizeRoleKey(it.role);
+      (groups[rk] ||= []).push(it);
     }
-    const roleGroups = Object.values(groups);
-
-    if (roleGroups.length === 0) {
-      if (companyItems.length > 0) applications.push(companyItems);
-    } else if (roleGroups.length === 1) {
-      roleGroups[0].push(...roleless);
-      applications.push(roleGroups[0]);
+    const roleKeys = Object.keys(groups);
+    if (roleKeys.length === 0) {
+      if (companyItems.length) apps.push({ ck, roleKey: "", emails: companyItems });
+    } else if (roleKeys.length === 1) {
+      apps.push({ ck, roleKey: roleKeys[0], emails: [...groups[roleKeys[0]], ...roleless] });
     } else {
       for (const rl of roleless) {
-        let best = roleGroups[0];
-        let bestDist = Infinity;
-        for (const g of roleGroups) {
-          const dist = Math.min(...g.map((e) => Math.abs(e.date - rl.date)));
-          if (dist < bestDist) { bestDist = dist; best = g; }
+        let bestRk = roleKeys[0], bestDist = Infinity;
+        for (const rk of roleKeys) {
+          const dist = Math.min(...groups[rk].map((e) => Math.abs(e.date - rl.date)));
+          if (dist < bestDist) { bestDist = dist; bestRk = rk; }
         }
-        best.push(rl);
+        groups[bestRk].push(rl);
       }
-      for (const g of roleGroups) applications.push(g);
+      for (const rk of roleKeys) apps.push({ ck, roleKey: rk, emails: groups[rk] });
     }
   }
 
-  const rows = applications.map(buildRow);
+  const appByKey = new Map<string, { ck: string; roleKey: string; emails: EmailItem[] }>();
+  for (const a of apps) appByKey.set(`${a.ck}::${a.roleKey}`, a);
+
+  const groupsById = new Map<string, MergeItem[]>();
+  for (const m of merges) {
+    if (!groupsById.has(m.groupId)) groupsById.set(m.groupId, []);
+    groupsById.get(m.groupId)!.push(m);
+  }
+
+  const consumed = new Set<string>();
+  const finalApps: FinalApp[] = [];
+
+  for (const members of groupsById.values()) {
+    const memberKeys = members.map((m) => `${m.companyKey}::${m.roleKey}`);
+    const primary = members.find((m) => m.isPrimary) || members[0];
+    const combinedEmails: EmailItem[] = [];
+    let anyExists = false;
+    for (const m of members) {
+      const k = `${m.companyKey}::${m.roleKey}`;
+      consumed.add(k);
+      const a = appByKey.get(k);
+      if (a) { combinedEmails.push(...a.emails); anyExists = true; }
+    }
+    if (!anyExists) continue;
+    const mergedWith = members.filter((m) => !m.isPrimary).map((m) => m.company).filter(Boolean);
+    finalApps.push({
+      emails: combinedEmails,
+      displayCompany: primary.company,
+      displayRole: primary.role,
+      memberKeys,
+      merged: true,
+      mergedWith,
+    });
+  }
+
+  for (const a of apps) {
+    const k = `${a.ck}::${a.roleKey}`;
+    if (consumed.has(k)) continue;
+    finalApps.push({ emails: a.emails, displayCompany: null, displayRole: null, memberKeys: [k], merged: false, mergedWith: [] });
+  }
+
+  const built = finalApps.map((fa) => {
+    const row = buildRow(fa.emails);
+    if (fa.displayCompany !== null) row.company = fa.displayCompany;
+    if (fa.displayRole !== null) row.role = fa.displayRole;
+    row.merged = fa.merged;
+    row.mergedWith = fa.mergedWith;
+    return { row, memberKeys: fa.memberKeys };
+  });
 
   if (manual.length > 0) {
-    const map = new Map<string, ManualOutcomeItem>();
-    for (const m of manual) map.set(`${m.companyKey}::${m.roleKey}`, m);
+    const mmap = new Map<string, ManualOutcomeItem>();
+    for (const m of manual) mmap.set(`${m.companyKey}::${m.roleKey}`, m);
 
-    for (const row of rows) {
-      const key = `${normalizeCompanyKey(row.company)}::${normalizeRoleKey(row.role)}`;
-      const m = map.get(key);
+    for (const { row, memberKeys } of built) {
+      let m: ManualOutcomeItem | undefined;
+      for (const k of memberKeys) { if (mmap.has(k)) { m = mmap.get(k); break; } }
       if (!m) continue;
 
       row.status = m.status === "Advancing" ? "Advancing" : "Rejected";
       row.manual = true;
       row.manualChannel = m.channel;
-
       const dateStr = new Date(m.date).toISOString().slice(0, 10);
       const entry: TimelineEntry = {
         date: dateStr,
@@ -201,5 +263,5 @@ export function aggregateEmails(items: EmailItem[], manual: ManualOutcomeItem[] 
     }
   }
 
-  return rows;
+  return built.map((b) => b.row);
 }

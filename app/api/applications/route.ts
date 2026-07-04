@@ -8,9 +8,10 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
 
   try {
-    const [emails, manualOutcomes] = await Promise.all([
+    const [emails, manualOutcomes, merges] = await Promise.all([
       prisma.email.findMany({ where: { userId: user.id } }),
       prisma.manualOutcome.findMany({ where: { userId: user.id } }),
+      prisma.appMerge.findMany({ where: { userId: user.id } }),
     ]);
 
     const rows = aggregateEmails(
@@ -33,6 +34,14 @@ export async function GET() {
         channel: m.channel,
         reason: m.reason,
         date: m.date.getTime(),
+      })),
+      merges.map((g) => ({
+        companyKey: g.companyKey,
+        roleKey: g.roleKey,
+        groupId: g.groupId,
+        isPrimary: g.isPrimary,
+        company: g.company,
+        role: g.role,
       }))
     );
 
