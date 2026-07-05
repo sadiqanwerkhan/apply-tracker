@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Row, STAGE_LABELS } from "@/lib/types";
 
 type Props = {
@@ -57,6 +58,45 @@ function CheckIcon() {
 const btnSecondary =
   "inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-gray-100 transition";
 const btnGhost = "text-xs text-gray-500 hover:text-gray-800 transition";
+
+const INTERVIEW_STAGE_KEYS = ["screening", "assessment", "interview", "offer"];
+
+function ViewDetailsButton({ row }: { row: Row }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function open() {
+    setLoading(true);
+    const seen = new Set<string>();
+    const seedStages: string[] = [];
+    for (const t of row.timeline || []) {
+      if (INTERVIEW_STAGE_KEYS.includes(t.stage) && !seen.has(t.stage)) {
+        seen.add(t.stage);
+        seedStages.push(STAGE_LABELS[t.stage] || t.stage);
+      }
+    }
+    try {
+      const res = await fetch("/api/applications/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: row.company, role: row.role, seedStages }),
+      });
+      const data = await res.json();
+      if (res.ok && data.id) router.push(`/application/${data.id}`);
+      else { setLoading(false); alert("Could not open details. Please try again."); }
+    } catch { setLoading(false); alert("Could not open details. Please try again."); }
+  }
+
+  return (
+    <button
+      onClick={open}
+      disabled={loading}
+      className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+    >
+      {loading ? "Opening…" : "Interview details & transcripts →"}
+    </button>
+  );
+}
 
 function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
   const [mode, setMode] = useState<"idle" | "picking" | "naming">("idle");
@@ -280,6 +320,7 @@ function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
       )}
 
       <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-3">
+        <ViewDetailsButton row={row} />
         <MergeControl row={row} allRows={allRows} />
         <OutcomeControl row={row} />
       </div>

@@ -115,3 +115,44 @@ model AppMerge {
   @@unique([userId, companyKey, roleKey])
   @@index([userId, groupId])
 }
+
+model Application {
+  id         String    @id @default(cuid())
+  userId     String
+  companyKey String
+  roleKey    String
+  company    String
+  role       String
+  analysis   String?   // AI cross-round analysis (filled in Step 3)
+  analysisAt DateTime?
+  createdAt  DateTime  @default(now())
+  stages     Stage[]
+
+  @@unique([userId, companyKey, roleKey])
+  @@index([userId])
+}
+
+model Stage {
+  id            String       @id @default(cuid())
+  applicationId String
+  name          String
+  order         Int          @default(0)
+  result        String?
+  createdAt     DateTime     @default(now())
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  transcripts   Transcript[]
+
+  @@index([applicationId])
+}
+
+model Transcript {
+  id        String   @id @default(cuid())
+  stageId   String
+  label     String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stage     Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([stageId])
+}
