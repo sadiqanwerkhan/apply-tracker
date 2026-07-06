@@ -90,7 +90,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h2 className="text-sm font-semibold text-gray-800">Interview analysis</h2>
-              <p className="text-xs text-gray-500 mt-0.5">AI reviews all your transcripts for this application and highlights patterns.</p>
+              <p className="text-xs text-gray-500 mt-0.5">AI reviews all your transcripts for this application and highlights patterns..</p>
             </div>
             <button
               onClick={runAnalysis}
