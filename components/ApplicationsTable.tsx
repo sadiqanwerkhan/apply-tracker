@@ -82,19 +82,38 @@ function ViewDetailsButton({ row }: { row: Row }) {
         body: JSON.stringify({ company: row.company, role: row.role, seedStages }),
       });
       const data = await res.json();
-      if (res.ok && data.id) router.push(`/application/${data.id}`);
-      else { setLoading(false); alert("Could not open details. Please try again."); }
-    } catch { setLoading(false); alert("Could not open details. Please try again."); }
+      if (res.ok && data.id) {
+        // keep the overlay up through navigation (don't unset loading)
+        router.push(`/application/${data.id}`);
+      } else {
+        setLoading(false);
+        alert("Could not open details. Please try again.");
+      }
+    } catch {
+      setLoading(false);
+      alert("Could not open details. Please try again.");
+    }
   }
 
   return (
-    <button
-      onClick={open}
-      disabled={loading}
-      className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-60"
-    >
-      {loading ? "Opening…" : "Interview details & transcripts →"}
-    </button>
+    <>
+      <button
+        onClick={open}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+      >
+        {loading ? "Opening…" : "Interview details & transcripts →"}
+      </button>
+
+      {loading && (
+        <div className="fixed inset-0 z-50 bg-white/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+            <p className="text-sm text-gray-600">Opening interview details…</p>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
