@@ -43,12 +43,13 @@ Role: ${input.role || "(not specified)"}
 Analyze ONLY the conversations in the transcripts below. Base every point strictly on what was actually said. Be honest, specific, and constructive.
 
 IMPORTANT:
-- Analyze HOW the candidate communicated and answered. You are NOT told the interviewers' private reasons, so never claim to know exactly why they decided as they did. Frame observations as "answers on X were vague", not "they rejected you because of X".
-- Point to concrete moments from the transcripts. Do not invent anything not present.
-- Keep each bullet to one or two sentences, plain and specific.
+- The transcripts capture the FULL conversation, including what the interviewers said, asked, and reacted to. Use their responses as real signal — e.g. when they corrected the candidate, steered an answer, or stated their own preferences, that is meaningful evidence.
+- You can reference how interviewers reacted, but do NOT claim to know their private post-interview hiring decision or the single reason behind it — that happens in a debrief not captured here. Frame it as "the interviewers pushed back on X" or "your answer on X needed steering," not "they rejected you because of X."
+- Base every point strictly on what was actually said in the transcripts. Do not invent anything.
 
 Return ONLY a JSON object (no markdown, no code fences, no extra text) with this exact shape:
 {
+  "readiness": { "band": "strong | mixed | needs_work", "reason": "one short honest sentence" },
   "headline": "one concise sentence summarizing the overall takeaway",
   "sections": [
     { "type": "strengths", "points": ["...", "..."] },
@@ -60,6 +61,8 @@ Return ONLY a JSON object (no markdown, no code fences, no extra text) with this
 }
 
 Rules:
+- "readiness.band" = your honest read of how the candidate came across across all rounds: "strong", "mixed", or "needs_work". Weigh the outcome context, but base it on the transcripts. This is a qualitative read, not a precise score.
+- "readiness.reason" = one short sentence explaining the band, based only on the transcripts.
 - Include all five section types, in that order.
 - "strengths" = moments/stages where the candidate came across well.
 - "struggles" = stages/topics where answers were weak or shallow.
