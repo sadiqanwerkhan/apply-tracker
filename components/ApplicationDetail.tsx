@@ -105,15 +105,14 @@ export default function ApplicationDetail({ application }: { application: AppT }
             <p className="text-xs text-gray-400 mt-3">Add at least one transcript above to enable analysis.</p>
           )}
 
-          {analysis && (
+        {analysis && (
             <div className="mt-4 border-t border-gray-100 pt-4">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words font-sans leading-relaxed">{analysis}</pre>
-              <p className="text-[11px] text-gray-400 mt-3">
+              <AnalysisView raw={analysis} />
+              <p className="text-[11px] text-gray-400 mt-4">
                 This reflects how the conversations went, based only on your transcripts — not the interviewers&apos; private reasons.
               </p>
             </div>
           )}
-        </div>
 
         {addingStage ? (
           <div className="mt-4 flex flex-col sm:flex-row gap-2">
@@ -134,6 +133,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
             + Add stage
           </button>
         )}
+          </div>
       </div>
     </main>
   );
@@ -250,6 +250,84 @@ function TranscriptItem({ transcript, busy, onCall }: { transcript: TranscriptT;
       ) : (
         <p className="text-sm text-gray-400 mt-1 break-words">{preview}</p>
       )}
+    </div>
+  );
+}
+
+// ---------- Analysis rendering (structured cards) ----------
+
+type AnalysisSection = { type: string; points: string[] };
+type ParsedAnalysis = { headline?: string; sections: AnalysisSection[] };
+
+function parseAnalysis(raw: string): ParsedAnalysis | null {
+  try {
+    const p = JSON.parse(raw);
+    if (p && Array.isArray(p.sections)) return p as ParsedAnalysis;
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
+const SECTION_META: Record<string, { label: string; badge: string; dot: string; ring: string }> = {
+  strengths: { label: "What you did well", badge: "bg-green-100 text-green-600", dot: "bg-green-500", ring: "border-green-200" },
+  struggles: { label: "Where you struggled", badge: "bg-amber-100 text-amber-600", dot: "bg-amber-500", ring: "border-amber-200" },
+  unsure: { label: "Questions you were unsure of", badge: "bg-red-100 text-red-600", dot: "bg-red-500", ring: "border-red-200" },
+  patterns: { label: "Recurring patterns", badge: "bg-purple-100 text-purple-600", dot: "bg-purple-500", ring: "border-purple-200" },
+  actions: { label: "Do differently next time", badge: "bg-indigo-100 text-indigo-600", dot: "bg-indigo-500", ring: "border-indigo-300" },
+};
+
+const SECTION_ORDER = ["strengths", "struggles", "unsure", "patterns", "actions"];
+
+function SectionIcon({ type }: { type: string }) {
+  const c = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  if (type === "strengths") return <svg {...c}><path d="M20 6 9 17l-5-5" /></svg>;
+  if (type === "struggles") return <svg {...c}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>;
+  if (type === "unsure") return <svg {...c}><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>;
+  if (type === "patterns") return <svg {...c}><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>;
+  if (type === "actions") return <svg {...c}><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>;
+  return <svg {...c}><circle cx="12" cy="12" r="10" /></svg>;
+}
+
+function AnalysisView({ raw }: { raw: string }) {
+  const parsed = parseAnalysis(raw);
+
+  // fallback for old plain-text analyses (still fully readable)
+  if (!parsed) {
+    return <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words font-sans leading-relaxed">{raw}</pre>;
+  }
+
+  const sections = parsed.sections
+    .filter((s) => s.points && s.points.length > 0)
+    .sort((a, b) => SECTION_ORDER.indexOf(a.type) - SECTION_ORDER.indexOf(b.type));
+
+  return (
+    <div>
+      {parsed.headline && <p className="text-base text-gray-800 font-medium mb-4 break-words">{parsed.headline}</p>}
+      <div className="space-y-3">
+        {sections.map((s, i) => {
+          const meta = SECTION_META[s.type] || { label: s.type, badge: "bg-gray-100 text-gray-600", dot: "bg-gray-400", ring: "border-gray-200" };
+          const emphasize = s.type === "actions";
+          return (
+            <div key={i} className={`rounded-xl border ${meta.ring} ${emphasize ? "bg-indigo-50/40" : "bg-white"} p-4`}>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className={`inline-flex items-center justify-center h-6 w-6 rounded-lg ${meta.badge}`}>
+                  <SectionIcon type={s.type} />
+                </span>
+                <h3 className="text-sm font-semibold text-gray-800">{meta.label}</h3>
+              </div>
+              <ul className="space-y-1.5">
+                {s.points.map((p, j) => (
+                  <li key={j} className="flex gap-2.5 text-sm text-gray-700 leading-relaxed">
+                    <span className={`shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                    <span className="break-words">{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
