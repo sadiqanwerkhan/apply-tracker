@@ -62,7 +62,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
   return (
     <main className="min-h-screen bg-gray-50 py-6 px-3 sm:py-10 sm:px-4">
       <div className="max-w-3xl mx-auto">
-        <Link href="/" className="text-sm text-indigo-600 hover:underline">← Back to applications</Link>
+        <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline">← Back to applications</button>
 
         <div className="mt-4 mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{application.company}</h1>
