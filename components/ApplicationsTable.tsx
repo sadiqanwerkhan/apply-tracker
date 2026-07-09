@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Row, STAGE_LABELS } from "@/lib/types";
 
@@ -66,6 +66,8 @@ function ViewDetailsButton({ row }: { row: Row }) {
   const [loading, setLoading] = useState(false);
 
   async function open() {
+    sessionStorage.setItem("appsScroll", String(window.scrollY));
+    sessionStorage.setItem("appsExpandedKey", `${row.company}|||${row.role}`);
     setLoading(true);
     const seen = new Set<string>();
     const seedStages: string[] = [];
@@ -362,6 +364,15 @@ function MetaRow({ r }: { r: Row }) {
 
 export default function ApplicationsTable({ items, allRows, scanning, emptyMessage = "No applications match your filters." }: Props) {
   const [expanded, setExpanded] = useState<number | null>(null);
+
+  // restore which row was expanded before navigating to a detail page
+  useEffect(() => {
+    const key = sessionStorage.getItem("appsExpandedKey");
+    if (!key) return;
+    sessionStorage.removeItem("appsExpandedKey");
+    const idx = items.findIndex((r) => `${r.company}|||${r.role}` === key);
+    if (idx !== -1) setTimeout(() => setExpanded(idx), 0);
+  }, [items]);
 
   if (scanning) {
     return (
