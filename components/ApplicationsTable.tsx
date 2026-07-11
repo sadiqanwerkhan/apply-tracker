@@ -365,13 +365,19 @@ function MetaRow({ r }: { r: Row }) {
 export default function ApplicationsTable({ items, allRows, scanning, emptyMessage = "No applications match your filters." }: Props) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  // restore which row was expanded before navigating to a detail page
-  useEffect(() => {
+  // restore which row was expanded before navigating to a detail page.
+  // wait until items have loaded, and only clear the saved key once we've
+  // actually found and opened the row (so an early empty render can't eat it).
+useEffect(() => {
+    if (items.length === 0) return;
     const key = sessionStorage.getItem("appsExpandedKey");
     if (!key) return;
-    sessionStorage.removeItem("appsExpandedKey");
     const idx = items.findIndex((r) => `${r.company}|||${r.role}` === key);
-    if (idx !== -1) setTimeout(() => setExpanded(idx), 0);
+    if (idx !== -1) {
+      sessionStorage.removeItem("appsExpandedKey");
+      const raf = requestAnimationFrame(() => setExpanded(idx));
+      return () => cancelAnimationFrame(raf);
+    }
   }, [items]);
 
   if (scanning) {
