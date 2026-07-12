@@ -92,6 +92,9 @@ export function useApplications() {
         setError(data.error === "not_connected" ? "Please reconnect Gmail." : "Scan failed. Try again.");
       } else {
         setRows(data.rows);
+        if (data.truncated) {
+          setError("Reached the 1000 email limit — some emails were not scanned. Narrow your date range to see everything.");
+        }
       }
     } catch {
       setError("Scan failed. Try again.");
