@@ -60,6 +60,7 @@ export function normalizeRoleKey(role: string): string {
   s = s.replace(/\(.*?\)/g, " ");
   s = s.replace(/\b(all genders|m\/w\/d|m\/f\/d|f\/m\/d|w\/m\/d|m\/w\/x|d\/m\/w|gn|div)\b/gi, " ");
   s = s.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  s = s.replace(/\s+/g, "");            // ← NEW: collapse all spaces
   return s;
 }
 

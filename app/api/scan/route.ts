@@ -6,7 +6,7 @@ import { aggregateEmails } from "@/lib/aggregate";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 
-const MAX_MESSAGES = 200;
+const MAX_MESSAGES = 1000;
 const FETCH_CHUNK = 10;
 const AI_BATCH = 12;
 const AI_DELAY_MS = 1500;
