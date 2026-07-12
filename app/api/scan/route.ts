@@ -227,17 +227,30 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 7) aggregate ALL of this user's stored applications
-    const allEmails = await prisma.email.findMany({ where: { userId: user.id } });
+// 7) aggregate ALL of this user's stored applications (incl. manual outcomes + merges)
+    const [allEmails, manualOutcomes, merges] = await Promise.all([
+      prisma.email.findMany({ where: { userId: user.id } }),
+      prisma.manualOutcome.findMany({ where: { userId: user.id } }),
+      prisma.appMerge.findMany({ where: { userId: user.id } }),
+    ]);
     const rows = aggregateEmails(
       allEmails.map((e) => ({
         companyKey: e.companyKey, company: e.company, role: e.role, sender: e.sender,
         isAts: e.isAts, status: e.status, stage: e.stage, date: e.date.getTime(), subject: e.subject,
         summary: e.summary,
+      })),
+      manualOutcomes.map((m) => ({
+        companyKey: m.companyKey, roleKey: m.roleKey, status: m.status,
+        channel: m.channel, reason: m.reason, date: m.date.getTime(),
+      })),
+      merges.map((g) => ({
+        companyKey: g.companyKey, roleKey: g.roleKey, groupId: g.groupId,
+        isPrimary: g.isPrimary, company: g.company, role: g.role,
       }))
     );
 
-    return NextResponse.json({ rows, newCount: finals.length });
+    const truncated = ids.length >= MAX_MESSAGES;
+    return NextResponse.json({ rows, newCount: finals.length, truncated });
   } catch (err) {
     console.error("Scan error:", err);
     return NextResponse.json({ error: "scan_failed" }, { status: 500 });
