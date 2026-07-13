@@ -254,10 +254,12 @@ export async function runScanChunk(
 
       let appId = appByKey.get(exactKey);
 
-      if (!appId && !rk) {
-        const candidates = appByCompany.get(ck) || [];
-        if (candidates.length === 1) appId = candidates[0];
-      }
+// exact key miss → if this company has exactly ONE application, attach to it
+// rather than inventing a second one for a role-string variant.
+if (!appId) {
+  const candidates = appByCompany.get(ck) || [];
+  if (candidates.length === 1) appId = candidates[0];
+}
 
       if (!appId) {
         const created = await prisma.application.create({
