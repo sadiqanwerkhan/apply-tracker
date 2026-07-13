@@ -6,7 +6,12 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { aggregateApplications, normalizeCompanyKey, normalizeRoleKey } from "@/lib/aggregate";
 
-const MAX_MESSAGES = 1000;
+// Vercel: allow up to 60s per invocation (Hobby maximum).
+// Each call now processes ONE bounded chunk, so it comfortably fits.
+export const maxDuration = 60;
+
+const MAX_MESSAGES = 1000; // message ids considered for a date range
+const CHUNK_SIZE = 24;     // new emails fully processed per invocation (2 AI batches)
 const FETCH_CHUNK = 10;
 const AI_BATCH = 12;
 const AI_DELAY_MS = 1500;
@@ -55,11 +60,30 @@ function keywordStage(subject: string, body: string): Stage {
   return "applied";
 }
 
+// Build the dashboard rows from the stable Application records.
+async function buildRows(userId: string) {
+  const apps = await prisma.application.findMany({
+    where: { userId },
+    include: { emails: true },
+  });
+  return aggregateApplications(
+    apps.map((a) => ({
+      id: a.id, company: a.company, role: a.role,
+      manualStatus: a.manualStatus, manualChannel: a.manualChannel,
+      manualReason: a.manualReason, manualDate: a.manualDate ? a.manualDate.getTime() : null,
+      mergedIntoId: a.mergedIntoId,
+      emails: a.emails.map((e) => ({
+        company: e.company, role: e.role, sender: e.sender, isAts: e.isAts,
+        status: e.status, stage: e.stage, date: e.date.getTime(),
+        subject: e.subject, summary: e.summary,
+      })),
+    }))
+  );
+}
+
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
 
   const account = await prisma.account.findFirst({
     where: { userId: user.id, provider: "google" },
@@ -105,7 +129,7 @@ export async function GET(req: NextRequest) {
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const query = buildQuery(startG, endG);
 
-    // 1) message IDs for the range
+    // 1) message ids for the range (cheap; repeated per chunk to stay stateless)
     let ids: string[] = [];
     let pageToken: string | undefined = undefined;
     do {
@@ -116,7 +140,9 @@ export async function GET(req: NextRequest) {
     } while (pageToken && ids.length < MAX_MESSAGES);
     ids = ids.slice(0, MAX_MESSAGES);
 
-    // 2) which of these have we already SEEN (stored as an application, or in the skip list)?
+    const truncated = ids.length >= MAX_MESSAGES;
+
+    // 2) THE CURSOR: whatever is already stored (or skipped) is already done.
     const [existingEmails, skippedRows] = await Promise.all([
       prisma.email.findMany({ where: { userId: user.id, id: { in: ids } }, select: { id: true } }),
       prisma.skippedEmail.findMany({ where: { userId: user.id, messageId: { in: ids } }, select: { messageId: true } }),
@@ -125,10 +151,24 @@ export async function GET(req: NextRequest) {
       ...existingEmails.map((e) => e.id),
       ...skippedRows.map((s) => s.messageId),
     ]);
-    const newIds = ids.filter((id) => !seen.has(id));
-    console.log(`Scan (${user.email}): ${ids.length} in range, ${seen.size} already seen, ${newIds.length} new`);
+    const allNewIds = ids.filter((id) => !seen.has(id));
 
-    // 3) fetch bodies for NEW emails only
+    // 2b) This invocation handles ONE bounded chunk.
+    const newIds = allNewIds.slice(0, CHUNK_SIZE);
+    const remaining = allNewIds.length - newIds.length;
+
+    console.log(
+      `Scan (${user.email}): ${ids.length} in range, ${seen.size} seen, ` +
+      `${allNewIds.length} new -> processing ${newIds.length}, ${remaining} remaining`
+    );
+
+    // nothing to do: return current state
+    if (newIds.length === 0) {
+      const rows = await buildRows(user.id);
+      return NextResponse.json({ rows, processed: 0, remaining: 0, done: true, truncated });
+    }
+
+    // 3) fetch bodies for THIS CHUNK only
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const newMessages: any[] = [];
     for (let i = 0; i < newIds.length; i += FETCH_CHUNK) {
@@ -141,13 +181,13 @@ export async function GET(req: NextRequest) {
       got.forEach((m) => { if (m) newMessages.push(m); });
     }
 
-    // 4) parse new messages (skip personal senders; keep the rest for the AI to judge)
+    // 4) parse
     type Parsed = {
       id: string; subject: string; body: string; date: number;
       regexCompany: string; regexRole: string; sender: string; isAts: boolean;
     };
     const parsed: Parsed[] = [];
-    const skipIds: string[] = []; // emails we judged not worth storing — remember them
+    const skipIds: string[] = [];
 
     for (const msg of newMessages) {
       const headers = msg.payload?.headers || [];
@@ -169,11 +209,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 5) AI: company + role + stage + promotional + reason. Promos & unidentifiable → skip list.
+    // 5) AI classification for this chunk
     type Final = {
-      id: string; companyKey: string; company: string; role: string;
-      sender: string; isAts: boolean; stage: Stage; subject: string; date: number;
-      summary: string | null;
+      id: string; company: string; role: string; sender: string; isAts: boolean;
+      stage: Stage; subject: string; date: number; summary: string | null;
     };
     const finals: Final[] = [];
 
@@ -191,13 +230,11 @@ export async function GET(req: NextRequest) {
         const company = (r && r.company) ? r.company : (p.regexCompany || "");
         const role = (r && r.role) ? r.role : (p.regexRole || "");
 
-        let label: string, key: string;
-        if (company) { label = company; key = company.toLowerCase(); }
-        else if (role) { label = "(" + role + ")"; key = "role:" + role.toLowerCase(); }
-        else { skipIds.push(p.id); continue; }
+        if (!company && !role) { skipIds.push(p.id); continue; }
+        const label = company || `(${role})`;
 
         finals.push({
-          id: p.id, companyKey: key, company: label, role,
+          id: p.id, company: label, role,
           sender: p.sender, isAts: p.isAts, stage, subject: p.subject, date: p.date,
           summary: r ? r.reason : null,
         });
@@ -207,18 +244,15 @@ export async function GET(req: NextRequest) {
         await new Promise((r) => setTimeout(r, AI_DELAY_MS));
       }
     }
-    console.log(`Scan (${user.email}): stored ${finals.length}, skipped ${skipIds.length}`);
 
-// 6) attach each new email to a stable Application (create one if needed)
+    // 6) PERSIST THIS CHUNK NOW (this is what makes progress durable)
     if (finals.length > 0) {
       const existingApps = await prisma.application.findMany({ where: { userId: user.id } });
       const appByKey = new Map<string, string>();
-      for (const a of existingApps) {
-        appByKey.set(`${normalizeCompanyKey(a.company)}::${normalizeRoleKey(a.role)}`, a.id);
-      }
       const appByCompany = new Map<string, string[]>();
       for (const a of existingApps) {
         const ck = normalizeCompanyKey(a.company);
+        appByKey.set(`${ck}::${normalizeRoleKey(a.role)}`, a.id);
         if (!appByCompany.has(ck)) appByCompany.set(ck, []);
         appByCompany.get(ck)!.push(a.id);
       }
@@ -236,7 +270,6 @@ export async function GET(req: NextRequest) {
 
         let appId = appByKey.get(exactKey);
 
-        // role-less email: attach to the company's only application if unambiguous
         if (!appId && !rk) {
           const candidates = appByCompany.get(ck) || [];
           if (candidates.length === 1) appId = candidates[0];
@@ -259,6 +292,7 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      // idempotent: re-writing the same Gmail message id is a no-op
       await prisma.email.createMany({ data: rowsToCreate, skipDuplicates: true });
     }
 
@@ -269,27 +303,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 7) build rows from stable Applications
-    const apps = await prisma.application.findMany({
-      where: { userId: user.id },
-      include: { emails: true },
-    });
-    const rows = aggregateApplications(
-      apps.map((a) => ({
-        id: a.id, company: a.company, role: a.role,
-        manualStatus: a.manualStatus, manualChannel: a.manualChannel,
-        manualReason: a.manualReason, manualDate: a.manualDate ? a.manualDate.getTime() : null,
-        mergedIntoId: a.mergedIntoId,
-        emails: a.emails.map((e) => ({
-          company: e.company, role: e.role, sender: e.sender, isAts: e.isAts,
-          status: e.status, stage: e.stage, date: e.date.getTime(),
-          subject: e.subject, summary: e.summary,
-        })),
-      }))
-    );
+    console.log(`Scan (${user.email}): chunk stored ${finals.length}, skipped ${skipIds.length}`);
 
-    const truncated = ids.length >= MAX_MESSAGES;
-    return NextResponse.json({ rows, newCount: finals.length, truncated });
+    // 7) return current rows + progress
+    const rows = await buildRows(user.id);
+    return NextResponse.json({
+      rows,
+      processed: newIds.length,
+      remaining,
+      done: remaining === 0,
+      truncated,
+    });
   } catch (err) {
     console.error("Scan error:", err);
     return NextResponse.json({ error: "scan_failed" }, { status: 500 });

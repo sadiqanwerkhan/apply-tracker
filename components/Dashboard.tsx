@@ -42,6 +42,7 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
           endDate={app.endDate}
           scanning={app.scanning}
           error={app.error}
+          progress={app.progress}
           onStart={app.setStartDate}
           onEnd={app.setEndDate}
           onScan={app.runScan}
