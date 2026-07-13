@@ -172,3 +172,19 @@ model Transcript {
 
   @@index([stageId])
 }
+
+model ScanJob {
+  id        String    @id @default(cuid())
+  userId    String
+  startDate String
+  endDate   String
+  status    String    @default("queued") // queued | running | complete | failed
+  processed Int       @default(0)
+  remaining Int       @default(0)
+  truncated Boolean   @default(false)
+  error     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+}

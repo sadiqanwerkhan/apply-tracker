@@ -88,32 +88,46 @@ async function runScan() {
     setStatusFilterState("All");
     setSortBy("date-desc");
 
-    let totalProcessed = 0;
-    let guard = 0; // safety: never loop forever
-
     try {
-      let done = false;
-      while (!done && guard < 200) {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: startDate, end: endDate }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.error || !data.jobId) {
+        setError("Could not start the scan. Please try again.");
+        setScanning(false);
+        return;
+      }
+
+      const jobId: string = data.jobId;
+      let guard = 0;
+
+      // Poll until the job finishes. The browser can close — the job keeps running.
+      while (guard < 600) {
         guard++;
-        const res = await fetch(`/api/scan?start=${startDate}&end=${endDate}`);
-        const data = await res.json();
+        await new Promise((r) => setTimeout(r, 2000));
 
-        if (!res.ok || data.error) {
-          setError(data.error === "not_connected" ? "Please reconnect Gmail." : "Scan failed. Try again.");
-          break;
-        }
+        const s = await fetch(`/api/scan/status?jobId=${jobId}`);
+        const j = await s.json();
+        if (!s.ok || j.error) continue;
 
-        setRows(data.rows);
-        totalProcessed += data.processed || 0;
-        setProgress({ processed: totalProcessed, remaining: data.remaining || 0 });
-
-        if (data.truncated) {
+        if (j.rows) setRows(j.rows);
+        setProgress({ processed: j.processed || 0, remaining: j.remaining || 0 });
+        if (j.truncated) {
           setError("Reached the 1000 email limit — narrow your date range to see everything.");
         }
-        done = !!data.done;
+
+        if (j.status === "complete") break;
+        if (j.status === "failed") {
+          setError(j.error || "Scan failed. Please try again.");
+          break;
+        }
       }
     } catch {
-      setError("Scan failed. Try again.");
+      setError("Scan failed. Please try again.");
     } finally {
       setScanning(false);
       setProgress(null);
