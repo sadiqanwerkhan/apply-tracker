@@ -19,6 +19,7 @@ export function useApplications() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const [progress, setProgress] = useState<{ processed: number; remaining: number } | null>(null);
   const [startDate, setStartDate] = useState(SIXTY_AGO);
   const [endDate, setEndDate] = useState(TODAY);
 
@@ -78,28 +79,44 @@ export function useApplications() {
     setStatusFilterState(v);
   }
 
-  async function runScan() {
+async function runScan() {
     setScanning(true);
     setError("");
+    setProgress(null);
     setPage(1);
     setSearch("");
     setStatusFilterState("All");
     setSortBy("date-desc");
+
+    let totalProcessed = 0;
+    let guard = 0; // safety: never loop forever
+
     try {
-      const res = await fetch(`/api/scan?start=${startDate}&end=${endDate}`);
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error === "not_connected" ? "Please reconnect Gmail." : "Scan failed. Try again.");
-      } else {
-        setRows(data.rows);
-        if (data.truncated) {
-          setError("Reached the 1000 email limit — some emails were not scanned. Narrow your date range to see everything.");
+      let done = false;
+      while (!done && guard < 200) {
+        guard++;
+        const res = await fetch(`/api/scan?start=${startDate}&end=${endDate}`);
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          setError(data.error === "not_connected" ? "Please reconnect Gmail." : "Scan failed. Try again.");
+          break;
         }
+
+        setRows(data.rows);
+        totalProcessed += data.processed || 0;
+        setProgress({ processed: totalProcessed, remaining: data.remaining || 0 });
+
+        if (data.truncated) {
+          setError("Reached the 1000 email limit — narrow your date range to see everything.");
+        }
+        done = !!data.done;
       }
     } catch {
       setError("Scan failed. Try again.");
     } finally {
       setScanning(false);
+      setProgress(null);
     }
   }
 
@@ -143,6 +160,6 @@ export function useApplications() {
     sortBy, setSortBy: updateSortBy,
     page: safePage, setPage, totalPages, pageItems, filtered,
     allRows: rows,
-    counts, runScan,
+    counts, runScan, progress,
   };
 }
