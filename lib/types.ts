@@ -7,6 +7,7 @@ export type TimelineEntry = {
 };
 
 export type Row = {
+  id: string;              // stable Application id
   company: string;
   role: string;
   status: string;
@@ -20,8 +21,8 @@ export type Row = {
   rejectionReason: string;
   manual: boolean;
   manualChannel: string;
-  merged: boolean;         // true if this row is a merge of multiple applications
-  mergedWith: string[];    // names of the other applications merged in
+  merged: boolean;
+  mergedWith: string[];
 };
 
 export type StatusFilter = "All" | "Advancing" | "Pending" | "Rejected";

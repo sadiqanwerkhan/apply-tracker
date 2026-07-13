@@ -17,13 +17,22 @@ export async function POST(req: NextRequest) {
   if (!app || app.userId !== user.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // find this application's overall outcome from the Email statuses (rejected/advancing/pending)
+// outcome from THIS application's own emails (including anything merged into it)
+  const memberIds = [
+    app.id,
+    ...(await prisma.application.findMany({
+      where: { userId: user.id, mergedIntoId: app.id },
+      select: { id: true },
+    })).map((a) => a.id),
+  ];
   const emails = await prisma.email.findMany({
-    where: { userId: user.id, companyKey: app.companyKey },
+    where: { applicationId: { in: memberIds } },
     select: { status: true },
   });
-  const outcome: "rejected" | "positive" | "unknown" =
-    emails.some((e) => e.status === "Rejected") ? "rejected"
-    : emails.some((e) => e.status === "Advancing") ? "positive"
+  const manual = app.manualStatus;
+const outcome: "rejected" | "positive" | "unknown" =
+    manual === "Rejected" || emails.some((e) => e.status === "Rejected") ? "rejected"
+    : manual === "Advancing" || emails.some((e) => e.status === "Advancing") ? "positive"
     : "unknown";
 
   const analysis = await analyzeInterviews({

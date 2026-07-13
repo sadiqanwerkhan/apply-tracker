@@ -7,26 +7,28 @@ datasource db {
   provider = "postgresql"
 }
 
-// ---- app data, now scoped per user ----
 model Email {
-  id         String   // Gmail message ID (unique within a user's mailbox)
-  userId     String
-  companyKey String
-  company    String
-  role       String
-  sender     String
-  isAts      Boolean
-  status     String
-  stage      String   @default("update")
-  summary    String?
-  subject    String
-  date       DateTime
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String
+  userId        String
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  companyKey    String
+  company       String
+  role          String
+  sender        String
+  isAts         Boolean
+  status        String
+  stage         String   @default("update")
+  summary       String?
+  subject       String
+  date          DateTime
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, id])
   @@index([userId])
   @@index([companyKey])
+  @@index([applicationId])
 }
 
 // ---- Auth.js (NextAuth) tables ----
@@ -117,19 +119,33 @@ model AppMerge {
 }
 
 model Application {
-  id         String    @id @default(cuid())
-  userId     String
-  companyKey String
-  roleKey    String
-  company    String
-  role       String
-  analysis   String?   // AI cross-round analysis (filled in Step 3)
-  analysisAt DateTime?
-  createdAt  DateTime  @default(now())
-  stages     Stage[]
+  id            String    @id @default(cuid())
+  userId        String
+  companyKey    String
+  roleKey       String
+  company       String
+  role          String
 
-  @@unique([userId, companyKey, roleKey])
+  // manual outcome recorded off-channel (will replace the ManualOutcome table)
+  manualStatus  String?
+  manualChannel String?
+  manualReason  String?
+  manualDate    DateTime?
+
+  // merge: if set, this application is folded into another one
+  mergedIntoId  String?
+  mergedInto    Application?  @relation("AppMergeRel", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom    Application[] @relation("AppMergeRel")
+
+  analysis      String?
+  analysisAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  emails        Email[]
+  stages        Stage[]
+
   @@index([userId])
+  @@index([userId, companyKey])
 }
 
 model Stage {

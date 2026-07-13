@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { aggregateEmails } from "@/lib/aggregate";
+import { aggregateApplications } from "@/lib/aggregate";
 import { getCurrentUser } from "@/lib/currentUser";
 
 export async function GET() {
@@ -8,40 +8,26 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
 
   try {
-    const [emails, manualOutcomes, merges] = await Promise.all([
-      prisma.email.findMany({ where: { userId: user.id } }),
-      prisma.manualOutcome.findMany({ where: { userId: user.id } }),
-      prisma.appMerge.findMany({ where: { userId: user.id } }),
-    ]);
+    const apps = await prisma.application.findMany({
+      where: { userId: user.id },
+      include: { emails: true },
+    });
 
-    const rows = aggregateEmails(
-      emails.map((e) => ({
-        companyKey: e.companyKey,
-        company: e.company,
-        role: e.role,
-        sender: e.sender,
-        isAts: e.isAts,
-        status: e.status,
-        stage: e.stage,
-        date: e.date.getTime(),
-        subject: e.subject,
-        summary: e.summary,
-      })),
-      manualOutcomes.map((m) => ({
-        companyKey: m.companyKey,
-        roleKey: m.roleKey,
-        status: m.status,
-        channel: m.channel,
-        reason: m.reason,
-        date: m.date.getTime(),
-      })),
-      merges.map((g) => ({
-        companyKey: g.companyKey,
-        roleKey: g.roleKey,
-        groupId: g.groupId,
-        isPrimary: g.isPrimary,
-        company: g.company,
-        role: g.role,
+    const rows = aggregateApplications(
+      apps.map((a) => ({
+        id: a.id,
+        company: a.company,
+        role: a.role,
+        manualStatus: a.manualStatus,
+        manualChannel: a.manualChannel,
+        manualReason: a.manualReason,
+        manualDate: a.manualDate ? a.manualDate.getTime() : null,
+        mergedIntoId: a.mergedIntoId,
+        emails: a.emails.map((e) => ({
+          company: e.company, role: e.role, sender: e.sender, isAts: e.isAts,
+          status: e.status, stage: e.stage, date: e.date.getTime(),
+          subject: e.subject, summary: e.summary,
+        })),
       }))
     );
 

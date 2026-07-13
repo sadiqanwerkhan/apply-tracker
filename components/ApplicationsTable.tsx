@@ -78,23 +78,13 @@ function ViewDetailsButton({ row }: { row: Row }) {
       }
     }
     try {
-      const res = await fetch("/api/applications/open", {
+      await fetch("/api/applications/open", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: row.company, role: row.role, seedStages }),
+        body: JSON.stringify({ applicationId: row.id, seedStages }),
       });
-      const data = await res.json();
-      if (res.ok && data.id) {
-        // keep the overlay up through navigation (don't unset loading)
-        router.push(`/application/${data.id}`);
-      } else {
-        setLoading(false);
-        alert("Could not open details. Please try again.");
-      }
-    } catch {
-      setLoading(false);
-      alert("Could not open details. Please try again.");
-    }
+    } catch { /* stages will seed on next open */ }
+    router.push(`/application/${row.id}`);
   }
 
   return (
@@ -106,7 +96,6 @@ function ViewDetailsButton({ row }: { row: Row }) {
       >
         {loading ? "Opening…" : "Interview details & transcripts →"}
       </button>
-
       {loading && (
         <div className="fixed inset-0 z-50 bg-white/70 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
@@ -125,10 +114,8 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const candidates = allRows.filter(
-    (r) =>
-      !(r.company === row.company && r.role === row.role) &&
-      (`${r.company} ${r.role}`).toLowerCase().includes(q.toLowerCase())
+const candidates = allRows.filter(
+    (r) => r.id !== row.id && (`${r.company} ${r.role}`).toLowerCase().includes(q.toLowerCase())
   );
 
   async function doMerge(primary: Row, other: Row) {
@@ -137,7 +124,7 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
       const res = await fetch("/api/merge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ primaryCompany: primary.company, primaryRole: primary.role, otherCompany: other.company, otherRole: other.role }),
+        body: JSON.stringify({ primaryId: primary.id, otherId: other.id }),
       });
       if (res.ok) window.location.reload();
       else { setSaving(false); alert("Could not merge. Please try again."); }
@@ -151,7 +138,7 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
       const res = await fetch("/api/merge", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: row.company, role: row.role }),
+        body: JSON.stringify({ applicationId: row.id }),
       });
       if (res.ok) window.location.reload();
       else setSaving(false);
@@ -240,7 +227,7 @@ function OutcomeControl({ row }: { row: Row }) {
       const res = await fetch("/api/manual-outcome", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: row.company, role: row.role, status, channel, reason: reason || undefined, date: date || undefined }),
+        body: JSON.stringify({ applicationId: row.id, status, channel, reason: reason || undefined, date: date || undefined }),
       });
       if (res.ok) window.location.reload();
       else { setSaving(false); alert("Could not save the outcome. Please try again."); }
@@ -254,7 +241,7 @@ function OutcomeControl({ row }: { row: Row }) {
       const res = await fetch("/api/manual-outcome", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: row.company, role: row.role }),
+        body: JSON.stringify({ applicationId: row.id }),
       });
       if (res.ok) window.location.reload();
       else setSaving(false);

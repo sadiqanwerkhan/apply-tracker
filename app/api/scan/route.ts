@@ -2,9 +2,9 @@ import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import { classify, extractCompany, extractRole, isPersonalSender } from "@/lib/classify";
 import { aiClassifyBatch, stageToStatus, Stage } from "@/lib/aiClassify";
-import { aggregateEmails } from "@/lib/aggregate";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
+import { aggregateApplications, normalizeCompanyKey, normalizeRoleKey } from "@/lib/aggregate";
 
 const MAX_MESSAGES = 1000;
 const FETCH_CHUNK = 10;
@@ -209,43 +209,82 @@ export async function GET(req: NextRequest) {
     }
     console.log(`Scan (${user.email}): stored ${finals.length}, skipped ${skipIds.length}`);
 
-    // 6a) save real applications (stage + derived status + reason summary)
+// 6) attach each new email to a stable Application (create one if needed)
     if (finals.length > 0) {
-      await prisma.email.createMany({
-        data: finals.map((f) => ({
-          id: f.id, userId: user.id, companyKey: f.companyKey, company: f.company, role: f.role,
-          sender: f.sender, isAts: f.isAts, stage: f.stage, status: stageToStatus(f.stage),
+      const existingApps = await prisma.application.findMany({ where: { userId: user.id } });
+      const appByKey = new Map<string, string>();
+      for (const a of existingApps) {
+        appByKey.set(`${normalizeCompanyKey(a.company)}::${normalizeRoleKey(a.role)}`, a.id);
+      }
+      const appByCompany = new Map<string, string[]>();
+      for (const a of existingApps) {
+        const ck = normalizeCompanyKey(a.company);
+        if (!appByCompany.has(ck)) appByCompany.set(ck, []);
+        appByCompany.get(ck)!.push(a.id);
+      }
+
+      const rowsToCreate: {
+        id: string; userId: string; applicationId: string; companyKey: string; company: string;
+        role: string; sender: string; isAts: boolean; stage: string; status: string;
+        subject: string; date: Date; summary: string | null;
+      }[] = [];
+
+      for (const f of finals) {
+        const ck = normalizeCompanyKey(f.company);
+        const rk = normalizeRoleKey(f.role);
+        const exactKey = `${ck}::${rk}`;
+
+        let appId = appByKey.get(exactKey);
+
+        // role-less email: attach to the company's only application if unambiguous
+        if (!appId && !rk) {
+          const candidates = appByCompany.get(ck) || [];
+          if (candidates.length === 1) appId = candidates[0];
+        }
+
+        if (!appId) {
+          const created = await prisma.application.create({
+            data: { userId: user.id, companyKey: ck, roleKey: rk, company: f.company, role: f.role },
+          });
+          appId = created.id;
+          appByKey.set(exactKey, appId);
+          if (!appByCompany.has(ck)) appByCompany.set(ck, []);
+          appByCompany.get(ck)!.push(appId);
+        }
+
+        rowsToCreate.push({
+          id: f.id, userId: user.id, applicationId: appId, companyKey: ck, company: f.company,
+          role: f.role, sender: f.sender, isAts: f.isAts, stage: f.stage, status: stageToStatus(f.stage),
           subject: f.subject, date: new Date(f.date), summary: f.summary,
-        })),
-      });
+        });
+      }
+
+      await prisma.email.createMany({ data: rowsToCreate, skipDuplicates: true });
     }
 
-    // 6b) remember skipped emails so we never reprocess them (keeps repeat scans fast)
     if (skipIds.length > 0) {
       await prisma.skippedEmail.createMany({
         data: skipIds.map((id) => ({ userId: user.id, messageId: id })),
+        skipDuplicates: true,
       });
     }
 
-// 7) aggregate ALL of this user's stored applications (incl. manual outcomes + merges)
-    const [allEmails, manualOutcomes, merges] = await Promise.all([
-      prisma.email.findMany({ where: { userId: user.id } }),
-      prisma.manualOutcome.findMany({ where: { userId: user.id } }),
-      prisma.appMerge.findMany({ where: { userId: user.id } }),
-    ]);
-    const rows = aggregateEmails(
-      allEmails.map((e) => ({
-        companyKey: e.companyKey, company: e.company, role: e.role, sender: e.sender,
-        isAts: e.isAts, status: e.status, stage: e.stage, date: e.date.getTime(), subject: e.subject,
-        summary: e.summary,
-      })),
-      manualOutcomes.map((m) => ({
-        companyKey: m.companyKey, roleKey: m.roleKey, status: m.status,
-        channel: m.channel, reason: m.reason, date: m.date.getTime(),
-      })),
-      merges.map((g) => ({
-        companyKey: g.companyKey, roleKey: g.roleKey, groupId: g.groupId,
-        isPrimary: g.isPrimary, company: g.company, role: g.role,
+    // 7) build rows from stable Applications
+    const apps = await prisma.application.findMany({
+      where: { userId: user.id },
+      include: { emails: true },
+    });
+    const rows = aggregateApplications(
+      apps.map((a) => ({
+        id: a.id, company: a.company, role: a.role,
+        manualStatus: a.manualStatus, manualChannel: a.manualChannel,
+        manualReason: a.manualReason, manualDate: a.manualDate ? a.manualDate.getTime() : null,
+        mergedIntoId: a.mergedIntoId,
+        emails: a.emails.map((e) => ({
+          company: e.company, role: e.role, sender: e.sender, isAts: e.isAts,
+          status: e.status, stage: e.stage, date: e.date.getTime(),
+          subject: e.subject, summary: e.summary,
+        })),
       }))
     );
 
