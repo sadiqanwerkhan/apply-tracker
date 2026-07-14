@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { classify, extractCompany, extractRole, isPersonalSender } from "@/lib/classify";
 import { aiClassifyBatch, stageToStatus, Stage } from "@/lib/aiClassify";
 import { prisma } from "@/lib/prisma";
-import { normalizeCompanyKey, normalizeRoleKey } from "@/lib/aggregate";
+import { normalizeCompanyKey, normalizeRoleKey, companyKeysMatch } from "@/lib/aggregate";
 
 const MAX_MESSAGES = 1000;
 const CHUNK_SIZE = 24;
@@ -255,17 +255,24 @@ export async function runScanChunk(
     }
   }
 
-  // 6) PERSIST THIS CHUNK (durable progress)
+// 6) PERSIST THIS CHUNK.
+  //    Applications stay ROLE-LEVEL (two Tesla roles = two rows).
+  //    But an email with NO role (calendar invite, "Re:", confirmation) must
+  //    NEVER create its own row — it attaches to the company's nearest
+  //    application by date. This restores the read-time behaviour that was lost.
   if (finals.length > 0) {
-    const existingApps = await prisma.application.findMany({ where: { userId } });
-    const appByKey = new Map<string, string>();
-    const appByCompany = new Map<string, string[]>();
-    for (const a of existingApps) {
-      const ck = normalizeCompanyKey(a.company);
-      appByKey.set(`${ck}::${normalizeRoleKey(a.role)}`, a.id);
-      if (!appByCompany.has(ck)) appByCompany.set(ck, []);
-      appByCompany.get(ck)!.push(a.id);
-    }
+    const existingApps = await prisma.application.findMany({
+      where: { userId },
+      select: { id: true, company: true, role: true, emails: { select: { date: true } } },
+    });
+
+    type AppRef = { id: string; ck: string; rk: string; dates: number[] };
+    const apps: AppRef[] = existingApps.map((a) => ({
+      id: a.id,
+      ck: normalizeCompanyKey(a.company),
+      rk: normalizeRoleKey(a.role),
+      dates: a.emails.map((e) => e.date.getTime()),
+    }));
 
     const rowsToCreate: {
       id: string; userId: string; applicationId: string; companyKey: string; company: string;
@@ -276,26 +283,52 @@ export async function runScanChunk(
     for (const f of finals) {
       const ck = normalizeCompanyKey(f.company);
       const rk = normalizeRoleKey(f.role);
-      const exactKey = `${ck}::${rk}`;
+      const sameCompany = apps.filter((a) => companyKeysMatch(a.ck, ck));
 
-      let appId = appByKey.get(exactKey);
+      let appId: string | undefined;
 
-      // exact key miss → if this company has exactly ONE application, attach to it
-      // rather than inventing a second one for a role-string variant.
-      if (!appId) {
-        const candidates = appByCompany.get(ck) || [];
-        if (candidates.length === 1) appId = candidates[0];
+      // 1) exact role match at this company
+      if (rk) {
+        const exact = sameCompany.find((a) => a.rk === rk);
+        if (exact) appId = exact.id;
       }
 
+      // 2) NO role on this email → attach to the company's nearest application
+      //    by date. Never let it create an orphan "no role" row.
+      if (!appId && !rk && sameCompany.length > 0) {
+        let best = sameCompany[0];
+        let bestDist = Infinity;
+        for (const a of sameCompany) {
+          const d = a.dates.length ? Math.min(...a.dates.map((t) => Math.abs(t - f.date))) : Infinity;
+          if (d < bestDist) { bestDist = d; best = a; }
+        }
+        appId = best.id;
+      }
+
+      // 3) HAS a role, and this company has a role-less placeholder → adopt it
+      if (!appId && rk) {
+        const placeholder = sameCompany.find((a) => a.rk === "");
+        if (placeholder) {
+          await prisma.application.update({
+            where: { id: placeholder.id },
+            data: { role: f.role, roleKey: rk },
+          });
+          placeholder.rk = rk;
+          appId = placeholder.id;
+        }
+      }
+
+      // 4) genuinely a new role (or a new company) → new application
       if (!appId) {
         const created = await prisma.application.create({
           data: { userId, companyKey: ck, roleKey: rk, company: f.company, role: f.role },
         });
         appId = created.id;
-        appByKey.set(exactKey, appId);
-        if (!appByCompany.has(ck)) appByCompany.set(ck, []);
-        appByCompany.get(ck)!.push(appId);
+        apps.push({ id: created.id, ck, rk, dates: [] });
       }
+
+      const ref = apps.find((a) => a.id === appId);
+      if (ref) ref.dates.push(f.date);
 
       rowsToCreate.push({
         id: f.id, userId, applicationId: appId, companyKey: ck, company: f.company,
