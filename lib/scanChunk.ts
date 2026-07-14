@@ -5,10 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { normalizeCompanyKey, normalizeRoleKey, companyKeysMatch } from "@/lib/aggregate";
 
 const MAX_MESSAGES = 1000;
-const CHUNK_SIZE = 24;
-const FETCH_CHUNK = 10;
-const AI_BATCH = 12;
-const AI_DELAY_MS = 1500;
+const CHUNK_SIZE = 60;   // emails fully processed per invocation
+const FETCH_CHUNK = 20;  // Gmail body fetches in flight at once
+const AI_BATCH = 15;     // emails per Claude call
+const AI_PARALLEL = 3;   // Claude calls in flight at once
+// No sleep between batches: Inngest retries a failed chunk, so a transient
+// rate-limit is no longer catastrophic. Reliability bought the right to be fast.
 
 export type ChunkResult = {
   processed: number;
@@ -70,6 +72,11 @@ function keywordStage(subject: string, body: string): Stage {
   if (kw === "Advancing") return "interview";
   return "applied";
 }
+
+type Parsed = {
+  id: string; subject: string; body: string; date: number;
+  regexCompany: string; regexRole: string; sender: string; isAts: boolean;
+};
 
 /**
  * Process ONE bounded chunk of a user's scan.
@@ -157,21 +164,26 @@ export async function runScanChunk(
   // 3) fetch bodies for THIS CHUNK only
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newMessages: any[] = [];
+  const unfetchable: string[] = [];
   for (let i = 0; i < newIds.length; i += FETCH_CHUNK) {
     const chunk = newIds.slice(i, i + FETCH_CHUNK);
     const got = await Promise.all(
       chunk.map((id) =>
-        gmail.users.messages.get({ userId: "me", id, format: "full" }).then((r) => r.data).catch(() => null)
+        gmail.users.messages.get({ userId: "me", id, format: "full" })
+          .then((r) => ({ id, data: r.data }))
+          .catch((e) => {
+            console.warn(`ScanChunk: could not fetch ${id}: ${e?.message || e}`);
+            return { id, data: null };
+          })
       )
     );
-    got.forEach((m) => { if (m) newMessages.push(m); });
+    for (const g of got) {
+      if (g.data) newMessages.push(g.data);
+      else unfetchable.push(g.id);
+    }
   }
 
   // 4) parse
-  type Parsed = {
-    id: string; subject: string; body: string; date: number;
-    regexCompany: string; regexRole: string; sender: string; isAts: boolean;
-  };
   const parsed: Parsed[] = [];
   const skipIds: string[] = [];
 
@@ -184,7 +196,6 @@ export async function runScanChunk(
     const date = parseInt(msg.internalDate, 10);
 
     if (isPersonalSender(from)) {
-      console.log(`ScanChunk: skip [personal/service sender] ${subject}`);
       skipIds.push(msg.id);
       continue;
     }
@@ -199,63 +210,70 @@ export async function runScanChunk(
     });
   }
 
-  // 5) AI classification — with rejection protection
+  // 5) AI classification — batches run in PARALLEL, with rejection protection.
   type Final = {
     id: string; company: string; role: string; sender: string; isAts: boolean;
     stage: Stage; subject: string; date: number; summary: string | null;
   };
   const finals: Final[] = [];
 
+  const batches: Parsed[][] = [];
   for (let i = 0; i < parsed.length; i += AI_BATCH) {
-    const batch = parsed.slice(i, i + AI_BATCH);
-    const ai = await aiClassifyBatch(batch.map((p) => ({ subject: p.subject, body: p.body })));
+    batches.push(parsed.slice(i, i + AI_BATCH));
+  }
 
-    for (let j = 0; j < batch.length; j++) {
-      const p = batch[j];
-      const r = ai[j];
+  for (let i = 0; i < batches.length; i += AI_PARALLEL) {
+    const group = batches.slice(i, i + AI_PARALLEL);
+    const results = await Promise.all(
+      group.map((b) => aiClassifyBatch(b.map((p) => ({ subject: p.subject, body: p.body }))))
+    );
 
-      // Cheap, deterministic keyword read of the raw text. Hard to fool.
-      const kwStage = keywordStage(p.subject, p.body);
-      const looksLikeRejection = kwStage === "rejected";
+    for (let g = 0; g < group.length; g++) {
+      const batch = group[g];
+      const ai = results[g];
 
-      // DEFENSE IN DEPTH: never let the AI discard a probable rejection.
-      // Losing a rejection makes the app lie about your status — the worst
-      // failure mode this system has.
-      if (r && r.promotional && !looksLikeRejection) {
-        console.log(`ScanChunk: skip [promotional] ${p.subject}`);
-        skipIds.push(p.id);
-        continue;
+      for (let j = 0; j < batch.length; j++) {
+        const p = batch[j];
+        const r = ai[j];
+
+        // Cheap, deterministic keyword read of the raw text. Hard to fool.
+        const kwStage = keywordStage(p.subject, p.body);
+        const looksLikeRejection = kwStage === "rejected";
+
+        // DEFENSE IN DEPTH: never let the AI discard a probable rejection.
+        // Losing a rejection makes the app lie about your status — the worst
+        // failure mode this system has.
+        if (r && r.promotional && !looksLikeRejection) {
+          console.log(`ScanChunk: skip [promotional] ${p.subject}`);
+          skipIds.push(p.id);
+          continue;
+        }
+
+        // A keyword rejection overrides whatever the AI decided.
+        const stage: Stage = looksLikeRejection ? "rejected" : (r ? r.stage : kwStage);
+        const company = (r && r.company) ? r.company : (p.regexCompany || "");
+        const role = (r && r.role) ? r.role : (p.regexRole || "");
+
+        // Never drop a rejection just because we couldn't name the company.
+        let label = company || (role ? `(${role})` : "");
+        if (!label && looksLikeRejection) label = "Unknown company";
+
+        if (!label) {
+          console.log(`ScanChunk: skip [no company/role] ${p.subject}`);
+          skipIds.push(p.id);
+          continue;
+        }
+
+        finals.push({
+          id: p.id, company: label, role,
+          sender: p.sender, isAts: p.isAts, stage, subject: p.subject, date: p.date,
+          summary: r ? r.reason : null,
+        });
       }
-
-      // A keyword rejection overrides whatever the AI decided.
-      const stage: Stage = looksLikeRejection ? "rejected" : (r ? r.stage : kwStage);
-      const company = (r && r.company) ? r.company : (p.regexCompany || "");
-      const role = (r && r.role) ? r.role : (p.regexRole || "");
-
-      // Never drop a rejection just because we couldn't name the company.
-      // "Unknown company" is ugly, but visible beats invisible — you can merge it.
-      let label = company || (role ? `(${role})` : "");
-      if (!label && looksLikeRejection) label = "Unknown company";
-
-      if (!label) {
-        console.log(`ScanChunk: skip [no company/role] ${p.subject}`);
-        skipIds.push(p.id);
-        continue;
-      }
-
-      finals.push({
-        id: p.id, company: label, role,
-        sender: p.sender, isAts: p.isAts, stage, subject: p.subject, date: p.date,
-        summary: r ? r.reason : null,
-      });
-    }
-
-    if (i + AI_BATCH < parsed.length) {
-      await new Promise((r) => setTimeout(r, AI_DELAY_MS));
     }
   }
 
-// 6) PERSIST THIS CHUNK.
+  // 6) PERSIST THIS CHUNK.
   //    Applications stay ROLE-LEVEL (two Tesla roles = two rows).
   //    But an email with NO role (calendar invite, "Re:", confirmation) must
   //    NEVER create its own row — it attaches to the company's nearest
@@ -293,8 +311,7 @@ export async function runScanChunk(
         if (exact) appId = exact.id;
       }
 
-      // 2) NO role on this email → attach to the company's nearest application
-      //    by date. Never let it create an orphan "no role" row.
+      // 2) NO role on this email → attach to the company's nearest application by date
       if (!appId && !rk && sameCompany.length > 0) {
         let best = sameCompany[0];
         let bestDist = Infinity;
@@ -340,14 +357,18 @@ export async function runScanChunk(
     await prisma.email.createMany({ data: rowsToCreate, skipDuplicates: true });
   }
 
-  if (skipIds.length > 0) {
+  // messages we could not fetch are recorded too, so they can never loop forever
+  const toSkip = [...skipIds, ...unfetchable];
+  if (toSkip.length > 0) {
     await prisma.skippedEmail.createMany({
-      data: skipIds.map((id) => ({ userId, messageId: id })),
+      data: toSkip.map((id) => ({ userId, messageId: id })),
       skipDuplicates: true,
     });
   }
 
-  console.log(`ScanChunk(${userId}): stored ${finals.length}, skipped ${skipIds.length}`);
+  console.log(
+    `ScanChunk(${userId}): stored ${finals.length}, skipped ${skipIds.length}, unfetchable ${unfetchable.length}`
+  );
 
   return { processed: newIds.length, remaining, done: remaining === 0, truncated };
 }
