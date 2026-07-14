@@ -75,6 +75,9 @@ export async function aiClassifyBatch(
     - "rejected": the company declined the application or is not moving forward with the candidate.
     - "update": a genuine application-related email that does not fit any category above.
 - "reason": ONLY when stage is "rejected", a very short one-sentence summary of WHY the candidate was rejected, based strictly on what the email actually says. If the rejection gives no specific reason, use "No specific reason given". For every non-rejected email, use null.
+CRITICAL — distinguish an APPLICATION from RECRUITER OUTREACH:
+- If a recruiter is PITCHING a job to the candidate (unsolicited: "I have an opportunity", "could this be a next step for you", "our partner is hiring", contains an unsubscribe link, or comes via a sourcing platform), set "promotional": true. The candidate did NOT apply.
+- Only treat an email as an application if it responds to something the CANDIDATE started: an application confirmation, an interview invitation for a role they applied to, a rejection, or an offer.
 
 Return ONLY a JSON array of exactly ${emails.length} objects, one per email in order. No explanation, no other text.
 
