@@ -36,6 +36,8 @@ function buildQuery(startG: string, endG: string): string {
     '"thank you for applying"', '"your application"', "application", "applying",
     "interview", "unfortunately", '"next step"', "candidacy", '"move forward"',
     "recruiting", "recruiter", "position", "role",
+    // rejection-specific terms, so a rejection can never miss the Gmail query
+    '"regret to inform"', '"not moving forward"', '"other candidates"', '"talent pool"',
   ].join(" OR ");
   return `after:${startG} before:${endG} (${keywords})`;
 }
@@ -72,12 +74,12 @@ function keywordStage(subject: string, body: string): Stage {
 /**
  * Process ONE bounded chunk of a user's scan.
  *
- * This function is idempotent and resumable:
+ * Idempotent and resumable:
  *  - emails already stored (or skipped) are the cursor
  *  - the chunk is persisted before returning
  *  - re-running it repeats only un-persisted work
  *
- * It knows nothing about HTTP, so it can be driven by a route, a queue, or a cron.
+ * Knows nothing about HTTP, so it can be driven by a route, a queue, or a cron.
  */
 export async function runScanChunk(
   userId: string,
@@ -181,7 +183,11 @@ export async function runScanChunk(
     const subject = (headers.find((h: any) => h.name === "Subject") || {}).value || "";
     const date = parseInt(msg.internalDate, 10);
 
-    if (isPersonalSender(from)) { skipIds.push(msg.id); continue; }
+    if (isPersonalSender(from)) {
+      console.log(`ScanChunk: skip [personal/service sender] ${subject}`);
+      skipIds.push(msg.id);
+      continue;
+    }
 
     const info = extractCompany(from);
     const role = extractRole(subject);
@@ -193,7 +199,7 @@ export async function runScanChunk(
     });
   }
 
-  // 5) AI classification
+  // 5) AI classification — with rejection protection
   type Final = {
     id: string; company: string; role: string; sender: string; isAts: boolean;
     stage: Stage; subject: string; date: number; summary: string | null;
@@ -208,14 +214,34 @@ export async function runScanChunk(
       const p = batch[j];
       const r = ai[j];
 
-      if (r && r.promotional) { skipIds.push(p.id); continue; }
+      // Cheap, deterministic keyword read of the raw text. Hard to fool.
+      const kwStage = keywordStage(p.subject, p.body);
+      const looksLikeRejection = kwStage === "rejected";
 
-      const stage: Stage = r ? r.stage : keywordStage(p.subject, p.body);
+      // DEFENSE IN DEPTH: never let the AI discard a probable rejection.
+      // Losing a rejection makes the app lie about your status — the worst
+      // failure mode this system has.
+      if (r && r.promotional && !looksLikeRejection) {
+        console.log(`ScanChunk: skip [promotional] ${p.subject}`);
+        skipIds.push(p.id);
+        continue;
+      }
+
+      // A keyword rejection overrides whatever the AI decided.
+      const stage: Stage = looksLikeRejection ? "rejected" : (r ? r.stage : kwStage);
       const company = (r && r.company) ? r.company : (p.regexCompany || "");
       const role = (r && r.role) ? r.role : (p.regexRole || "");
 
-      if (!company && !role) { skipIds.push(p.id); continue; }
-      const label = company || `(${role})`;
+      // Never drop a rejection just because we couldn't name the company.
+      // "Unknown company" is ugly, but visible beats invisible — you can merge it.
+      let label = company || (role ? `(${role})` : "");
+      if (!label && looksLikeRejection) label = "Unknown company";
+
+      if (!label) {
+        console.log(`ScanChunk: skip [no company/role] ${p.subject}`);
+        skipIds.push(p.id);
+        continue;
+      }
 
       finals.push({
         id: p.id, company: label, role,
@@ -254,12 +280,12 @@ export async function runScanChunk(
 
       let appId = appByKey.get(exactKey);
 
-// exact key miss → if this company has exactly ONE application, attach to it
-// rather than inventing a second one for a role-string variant.
-if (!appId) {
-  const candidates = appByCompany.get(ck) || [];
-  if (candidates.length === 1) appId = candidates[0];
-}
+      // exact key miss → if this company has exactly ONE application, attach to it
+      // rather than inventing a second one for a role-string variant.
+      if (!appId) {
+        const candidates = appByCompany.get(ck) || [];
+        if (candidates.length === 1) appId = candidates[0];
+      }
 
       if (!appId) {
         const created = await prisma.application.create({
