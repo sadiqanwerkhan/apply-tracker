@@ -26,7 +26,7 @@ export const REJECT_PHRASES = [
 ];
 
 export const ADVANCE_PHRASES = [
-  "we would like to invite", "we'd like to invite", "invite you to", "next round", "next step",
+  "we would like to invite", "we'd like to invite", "invite you to", "next round",
   "schedule a call", "schedule an interview", "phone screen", "technical interview",
   "coding challenge", "technical assessment", "take-home", "take home", "live coding",
   "system design", "would like to speak", "would like to meet", "move forward with your application",
@@ -160,6 +160,9 @@ const SERVICE_DOMAINS = [
   "aws.amazon.com", "amazonaws.com", "digitalocean.com", "cloudflare.com",
   // payments / packages
   "stripe.com", "paypal.com", "npmjs.com",
+  // inbound recruiter-outreach platforms — they pitch jobs you never applied to
+  "xing.com", "new-work.se", "instaffo.com",
+  "hays.de", "michaelpage.de", "roberthalf.com", "talent.com",
 ];
 
 function domainOf(from: string): string {
