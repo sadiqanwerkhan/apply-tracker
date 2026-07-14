@@ -55,6 +55,17 @@ export function normalizeRoleKey(role: string): string {
   return s;
 }
 
+/** Word-prefix company match: "tesla" == "tesla giga berlin". Safe: "deutsche bank" != "deutsche telekom". */
+export function companyKeysMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const wa = a.split(" ").filter(Boolean);
+  const wb = b.split(" ").filter(Boolean);
+  const shorter = wa.length <= wb.length ? wa : wb;
+  const longer = wa.length <= wb.length ? wb : wa;
+  return shorter.every((w, i) => longer[i] === w);
+}
+
 function baseRow(): Row {
   return {
     id: "", company: "", role: "", status: "Pending", confidence: "High", sender: "",
