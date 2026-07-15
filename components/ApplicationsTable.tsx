@@ -29,6 +29,14 @@ function dotClasses(stage: string) {
   return "bg-gray-400";
 }
 
+// An application should offer "Interview details & transcripts" only when a real
+// interview happened — i.e. there is a timeline event beyond the initial "applied"
+// and the "rejected" ones. Applied-only or applied→rejected has nothing to transcribe.
+const NON_INTERVIEW_STAGES = new Set(["applied", "rejected", "update"]);
+function hasRealInterview(row: Row): boolean {
+  return (row.timeline || []).some((t) => !NON_INTERVIEW_STAGES.has(t.stage));
+}
+
 const CHANNELS = ["LinkedIn", "WhatsApp", "Phone", "Indeed", "Email", "Other"];
 
 function LinkIcon() {
@@ -83,7 +91,9 @@ function ViewDetailsButton({ row }: { row: Row }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ applicationId: row.id, seedStages }),
       });
-    } catch { /* stages will seed on next open */ }
+    } catch {
+      /* stages will seed on next open */
+    }
     router.push(`/application/${row.id}`);
   }
 
@@ -96,6 +106,7 @@ function ViewDetailsButton({ row }: { row: Row }) {
       >
         {loading ? "Opening…" : "Interview details & transcripts →"}
       </button>
+
       {loading && (
         <div className="fixed inset-0 z-50 bg-white/70 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
@@ -114,7 +125,7 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
 
-const candidates = allRows.filter(
+  const candidates = allRows.filter(
     (r) => r.id !== row.id && (`${r.company} ${r.role}`).toLowerCase().includes(q.toLowerCase())
   );
 
@@ -180,8 +191,8 @@ const candidates = allRows.filter(
             {candidates.length === 0 ? (
               <p className="text-sm text-gray-400 px-3 py-3">No other applications match.</p>
             ) : (
-              candidates.map((c, i) => (
-                <button key={i} onClick={() => { setPicked(c); setMode("naming"); }} className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition">
+              candidates.map((c) => (
+                <button key={c.id} onClick={() => { setPicked(c); setMode("naming"); }} className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition">
                   <span className="block text-sm font-medium text-gray-800 break-words">{c.company}</span>
                   {c.role && <span className="block text-xs text-gray-500 break-words mt-0.5">{c.role}</span>}
                 </button>
@@ -306,6 +317,8 @@ function OutcomeControl({ row }: { row: Row }) {
 }
 
 function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
+  const showDetails = hasRealInterview(row);
+
   return (
     <div className="px-4 sm:px-6 py-4 sm:py-5 bg-gray-50">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-4">Application timeline</p>
@@ -328,7 +341,11 @@ function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
       )}
 
       <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-3">
-        <ViewDetailsButton row={row} />
+        {/* Details + transcripts appear only once a real interview exists —
+            not for applied-only or applied→rejected. Merge and Record outcome
+            are always available (a next-round or rejection email may arrive
+            from a different address and need merging or recording). */}
+        {showDetails && <ViewDetailsButton row={row} />}
         <MergeControl row={row} allRows={allRows} />
         <OutcomeControl row={row} />
       </div>
@@ -355,14 +372,14 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
   // restore which row was expanded before navigating to a detail page.
   // wait until items have loaded, and only clear the saved key once we've
   // actually found and opened the row (so an early empty render can't eat it).
-useEffect(() => {
+  useEffect(() => {
     if (items.length === 0) return;
     const key = sessionStorage.getItem("appsExpandedKey");
     if (!key) return;
     const idx = items.findIndex((r) => `${r.company}|||${r.role}` === key);
     if (idx !== -1) {
-      sessionStorage.removeItem("appsExpandedKey");
       const raf = requestAnimationFrame(() => setExpanded(idx));
+      sessionStorage.removeItem("appsExpandedKey");
       return () => cancelAnimationFrame(raf);
     }
   }, [items]);
