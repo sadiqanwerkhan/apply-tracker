@@ -22,6 +22,7 @@ export function useApplications() {
   const [progress, setProgress] = useState<{ processed: number; remaining: number } | null>(null);
   const [startDate, setStartDate] = useState(SIXTY_AGO);
   const [endDate, setEndDate] = useState(TODAY);
+  const [interviewedOnly, setInterviewedOnly] = useState(false);
 
   const [rows, setRows] = useState<Row[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -144,16 +145,18 @@ async function runScan() {
     [rows]
   );
 
-  const filtered = useMemo(() => {
+const filtered = useMemo(() => {
+    const INTERVIEW_STAGES = new Set(["screening", "assessment", "interview", "offer"]);
     return rows
       .filter((r) => statusFilter === "All" || r.status === statusFilter)
+      .filter((r) => !interviewedOnly || (r.timeline || []).some((t) => INTERVIEW_STAGES.has(t.stage)))
       .filter((r) => r.company.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => {
         if (sortBy === "company-asc") return a.company.localeCompare(b.company);
         if (sortBy === "date-asc") return a.lastSeen.localeCompare(b.lastSeen);
         return b.lastSeen.localeCompare(a.lastSeen);
       });
-  }, [rows, statusFilter, search, sortBy]);
+  }, [rows, statusFilter, search, sortBy, interviewedOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
@@ -175,5 +178,6 @@ async function runScan() {
     page: safePage, setPage, totalPages, pageItems, filtered,
     allRows: rows,
     counts, runScan, progress,
+    interviewedOnly, setInterviewedOnly,
   };
 }

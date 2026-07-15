@@ -48,7 +48,10 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
           onScan={app.runScan}
         />
 
-        {!busy && <StatsSummary rows={app.allRows} />}
+        {!busy && <StatsSummary rows={app.allRows}
+        onFilterStatus={(s) => { app.setInterviewedOnly(false); app.setStatusFilter(s); }}
+          onFilterInterviewed={() => { app.setStatusFilter("All"); app.setInterviewedOnly(true); }}
+          />}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
