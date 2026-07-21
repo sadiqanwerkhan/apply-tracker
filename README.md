@@ -128,3 +128,8 @@ A few decisions worth highlighting:
 - Manual application entry for applications that never generated an email
 - In-app Gmail reconnect to handle token expiry
 - A pre-filter before AI classification to reduce scan time and cost
+
+## Update
+- More features in pipeline.
+- Currently, the app is under construction that's why the scan is not working properly. We are fixing it.
+- We apologize for the inconvenience.
