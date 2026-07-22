@@ -36,5 +36,19 @@ export default async function Home() {
     await signOut({ redirectTo: "/" });
   }
 
-  return <Dashboard userEmail={session.user.email ?? ""} onSignOut={handleSignOut} />;
+  // Re-runs the Google consent flow, which writes a fresh access + refresh token
+  // over the expired one. Because allowDangerousEmailAccountLinking is on, this
+  // links cleanly to the existing user — no Account-row deletion needed.
+  async function handleReconnect() {
+    "use server";
+    await signIn("google", { redirectTo: "/" });
+  }
+
+  return (
+    <Dashboard
+      userEmail={session.user.email ?? ""}
+      onSignOut={handleSignOut}
+      onReconnect={handleReconnect}
+    />
+  );
 }

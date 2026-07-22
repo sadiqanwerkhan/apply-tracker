@@ -13,9 +13,10 @@ import StatsSummary from "@/components/StatsSummary";
 type Props = {
   userEmail: string;
   onSignOut: () => Promise<void>;
+  onReconnect: () => Promise<void>;
 };
 
-export default function Dashboard({ userEmail, onSignOut }: Props) {
+export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) {
   const app = useApplications();
   const busy = app.initialLoading || app.scanning;
 
@@ -27,6 +28,25 @@ export default function Dashboard({ userEmail, onSignOut }: Props) {
   return (
     <main className="min-h-screen bg-gray-50 py-6 px-3 sm:py-10 sm:px-4">
       <div className="max-w-6xl mx-auto">
+        {app.needsReconnect && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-900">Your Gmail connection expired</p>
+              <p className="text-sm text-amber-700 mt-0.5">
+                Reconnect to keep scanning. This just refreshes your Google sign-in — your data stays intact.
+              </p>
+            </div>
+            <form action={onReconnect}>
+              <button
+                type="submit"
+                className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg shrink-0"
+              >
+                Reconnect Gmail
+              </button>
+            </form>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Apply Tracker</h1>

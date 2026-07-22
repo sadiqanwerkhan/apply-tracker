@@ -13,14 +13,27 @@ export const scanInbox = inngest.createFunction(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const jobId = (event as any)?.data?.event?.data?.jobId;
       if (!jobId) return;
-      const message = String(
+      const raw = String(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (error as any)?.message || error || "unknown error"
-      ).slice(0, 480);
-      console.error("SCAN FAILED:", message);
+      );
+      console.error("SCAN FAILED:", raw);
+
+      // A dead/expired Google token is not a normal failure — the user must
+      // re-consent. Tag it with a machine-readable code the UI can detect,
+      // so it can show a "Reconnect Gmail" button instead of a generic error.
+      const isAuth =
+        raw.includes("invalid_grant") ||
+        raw.includes("no_google_account") ||
+        raw.includes("invalid_request") ||
+        raw.toLowerCase().includes("token has been expired or revoked");
+
       await prisma.scanJob.update({
         where: { id: jobId },
-        data: { status: "failed", error: message },
+        data: {
+          status: "failed",
+          error: isAuth ? "reconnect_required" : raw.slice(0, 480),
+        },
       });
     },
   },

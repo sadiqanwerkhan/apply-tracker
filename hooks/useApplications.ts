@@ -28,6 +28,7 @@ export function useApplications() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
+  const [needsReconnect, setNeedsReconnect] = useState(false);
 
   // initialize filter/search/sort FROM the URL so returning restores them
   const [search, setSearch] = useState(searchParams.get("q") || "");
@@ -80,9 +81,10 @@ export function useApplications() {
     setStatusFilterState(v);
   }
 
-async function runScan() {
+  async function runScan() {
     setScanning(true);
     setError("");
+    setNeedsReconnect(false);
     setProgress(null);
     setPage(1);
     setSearch("");
@@ -112,8 +114,11 @@ async function runScan() {
         await new Promise((r) => setTimeout(r, 2000));
 
         const s = await fetch(`/api/scan/status?jobId=${jobId}`);
+        // Only skip on a genuine HTTP failure of the status endpoint itself.
+        // Do NOT skip on the job's error field — a FAILED job carries an error,
+        // and that is exactly the signal we need to act on below.
+        if (!s.ok) continue;
         const j = await s.json();
-        if (!s.ok || j.error) continue;
 
         if (j.rows) setRows(j.rows);
         setProgress({ processed: j.processed || 0, remaining: j.remaining || 0 });
@@ -123,7 +128,12 @@ async function runScan() {
 
         if (j.status === "complete") break;
         if (j.status === "failed") {
-          setError(j.error || "Scan failed. Please try again.");
+          if (j.error === "reconnect_required") {
+            setNeedsReconnect(true);
+            setError("");
+          } else {
+            setError(j.error || "Scan failed. Please try again.");
+          }
           break;
         }
       }
@@ -145,7 +155,7 @@ async function runScan() {
     [rows]
   );
 
-const filtered = useMemo(() => {
+  const filtered = useMemo(() => {
     const INTERVIEW_STAGES = new Set(["screening", "assessment", "interview", "offer"]);
     return rows
       .filter((r) => statusFilter === "All" || r.status === statusFilter)
@@ -179,5 +189,6 @@ const filtered = useMemo(() => {
     allRows: rows,
     counts, runScan, progress,
     interviewedOnly, setInterviewedOnly,
+    needsReconnect,
   };
 }
