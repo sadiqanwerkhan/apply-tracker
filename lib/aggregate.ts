@@ -69,7 +69,7 @@ export function companyKeysMatch(a: string, b: string): boolean {
 function baseRow(): Row {
   return {
     id: "", company: "", role: "", status: "Pending", confidence: "High", sender: "",
-    firstSeen: "", lastSeen: "", note: "", currentStage: "update",
+    firstSeen: "", lastSeen: "", lastActivityAt: 0, note: "", currentStage: "update",
     timeline: [], rejectionReason: "", manual: false, manualChannel: "",
     merged: false, mergedWith: [],
   };
@@ -121,6 +121,7 @@ function buildRow(emails: EmailItem[]): Row {
   row.sender = emails[0].isAts ? emails[0].sender : "";
   row.firstSeen = new Date(firstSeen).toISOString().slice(0, 10);
   row.lastSeen = new Date(lastSeen).toISOString().slice(0, 10);
+  row.lastActivityAt = lastSeen;   // keep the real timestamp, not just the date
   row.timeline = timeline;
   row.currentStage = sorted.length ? sorted[sorted.length - 1].stage : "update";
   row.note = row.status === "Advancing" ? advanceSubject : row.status === "Rejected" ? rejectSubject : "";

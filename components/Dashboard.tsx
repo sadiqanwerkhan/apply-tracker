@@ -83,7 +83,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
 
           <SearchSort search={app.search} sortBy={app.sortBy} scanning={busy} onSearch={app.setSearch} onSort={app.setSortBy} />
           {app.scanning && <ScanningQuote />}
-          <ApplicationsTable items={app.pageItems} allRows={app.allRows} scanning={busy} emptyMessage={emptyMessage} />
+          <ApplicationsTable items={app.pageItems} allRows={app.allRows} scanning={busy} emptyMessage={emptyMessage} isNewRow={app.isNewRow} onSeen={app.markSeen} />
           {!busy && <Pagination page={app.page} totalPages={app.totalPages} onChange={app.setPage} />}
         </div>
       </div>

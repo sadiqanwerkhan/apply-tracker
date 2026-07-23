@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Row, StatusFilter } from "@/lib/types";
 
 const PAGE_SIZE = 20;
+const SEEN_KEY = "appsSeenActivity";
 
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -13,6 +14,14 @@ const TODAY = isoDate(new Date());
 const SIXTY_AGO = isoDate(new Date(Date.now() - 60 * 86400000));
 
 const VALID_STATUS: StatusFilter[] = ["All", "Advancing", "Pending", "Rejected"];
+
+// Real activity time for a row. Falls back to parsing the date string for rows
+// that only have a manual outcome (no email timestamp).
+function activityTime(r: Row): number {
+  if (r.lastActivityAt) return r.lastActivityAt;
+  const t = new Date(`${r.lastSeen}T00:00:00`).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
 
 export function useApplications() {
   const router = useRouter();
@@ -29,6 +38,70 @@ export function useApplications() {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
   const [needsReconnect, setNeedsReconnect] = useState(false);
+
+  // ── "New activity" tracking ──────────────────────────────────────────────
+  // Per-application seen state: applicationId -> the activity timestamp at the
+  // moment the row was last opened. A row is "new" when its latest activity is
+  // newer than that. This survives refreshes (unlike a global last-viewed
+  // clock) and re-highlights a company when fresh mail arrives.
+  // null = not loaded yet, so nothing highlights during the initial load.
+  const [seen, setSeen] = useState<Record<string, number> | null>(null);
+  const pendingBaseline = useRef(false);
+
+  function persistSeen(next: Record<string, number>) {
+    setSeen(next);
+    try {
+      localStorage.setItem(SEEN_KEY, JSON.stringify(next));
+    } catch {
+      // localStorage unavailable — highlights just won't persist
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SEEN_KEY);
+      if (raw) {
+        setSeen(JSON.parse(raw));
+        return;
+      }
+    } catch {
+      // fall through to baseline
+    }
+    // First ever use: wait for rows, then mark everything as already seen so
+    // the user isn't greeted by 170 highlighted rows.
+    pendingBaseline.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!pendingBaseline.current || rows.length === 0) return;
+    pendingBaseline.current = false;
+    const base: Record<string, number> = {};
+    for (const r of rows) base[r.id] = activityTime(r);
+    persistSeen(base);
+  }, [rows]);
+
+  function markSeen(id: string) {
+    if (!seen) return;
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+    const t = activityTime(row);
+    if (seen[id] === t) return; // already up to date
+    persistSeen({ ...seen, [id]: t });
+  }
+
+  function isNewRow(r: Row): boolean {
+    if (!seen) return false;
+    const seenAt = seen[r.id];
+    if (seenAt === undefined) return true; // an application you've never seen
+    return activityTime(r) > seenAt;
+  }
+
+  function markAllSeen() {
+    const next: Record<string, number> = { ...(seen || {}) };
+    for (const r of rows) next[r.id] = activityTime(r);
+    persistSeen(next);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   // initialize filter/search/sort FROM the URL so returning restores them
   const [search, setSearch] = useState(searchParams.get("q") || "");
@@ -115,8 +188,7 @@ export function useApplications() {
 
         const s = await fetch(`/api/scan/status?jobId=${jobId}`);
         // Only skip on a genuine HTTP failure of the status endpoint itself.
-        // Do NOT skip on the job's error field — a FAILED job carries an error,
-        // and that is exactly the signal we need to act on below.
+        // A FAILED job carries an error field — that's the signal we act on below.
         if (!s.ok) continue;
         const j = await s.json();
 
@@ -163,10 +235,17 @@ export function useApplications() {
       .filter((r) => r.company.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => {
         if (sortBy === "company-asc") return a.company.localeCompare(b.company);
-        if (sortBy === "date-asc") return a.lastSeen.localeCompare(b.lastSeen);
-        return b.lastSeen.localeCompare(a.lastSeen);
+        // Sort by the REAL timestamp so same-day items order by time of arrival.
+        if (sortBy === "date-asc") return activityTime(a) - activityTime(b);
+        return activityTime(b) - activityTime(a);
       });
   }, [rows, statusFilter, search, sortBy, interviewedOnly]);
+
+  const newCount = useMemo(
+    () => filtered.filter((r) => isNewRow(r)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, seen]
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
@@ -190,5 +269,6 @@ export function useApplications() {
     counts, runScan, progress,
     interviewedOnly, setInterviewedOnly,
     needsReconnect,
+    isNewRow, markSeen, markAllSeen, newCount,
   };
 }
