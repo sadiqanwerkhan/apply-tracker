@@ -9,6 +9,8 @@ type Props = {
   allRows: Row[];
   scanning: boolean;
   emptyMessage?: string;
+  isNewRow?: (r: Row) => boolean;
+  onSeen?: (id: string) => void;
 };
 
 function statusClasses(status: string) {
@@ -61,6 +63,9 @@ function CheckIcon() {
       <path d="M20 6 9 17l-5-5" />
     </svg>
   );
+}
+function NewDot() {
+  return <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" title="New activity" />;
 }
 
 const btnSecondary =
@@ -366,7 +371,7 @@ function MetaRow({ r }: { r: Row }) {
   );
 }
 
-export default function ApplicationsTable({ items, allRows, scanning, emptyMessage = "No applications match your filters." }: Props) {
+export default function ApplicationsTable({ items, allRows, scanning, emptyMessage = "No applications match your filters.", isNewRow, onSeen }: Props) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
   // restore which row was expanded before navigating to a detail page.
@@ -416,12 +421,19 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
           <tbody>
             {items.map((r, i) => {
               const isOpen = expanded === i;
+              const isNew = isNewRow?.(r) ?? false;
               return (
                 <Fragment key={i}>
-                  <tr onClick={() => setExpanded(isOpen ? null : i)} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer">
+                  <tr
+                    onClick={() => { onSeen?.(r.id); setExpanded(isOpen ? null : i); }}
+                    className={`border-b border-gray-100 cursor-pointer transition-colors ${
+                      isNew ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-gray-50"
+                    }`}
+                  >
                     <td className="py-3 px-3 font-medium text-gray-900">
                       <span className="inline-flex items-center gap-2">
                         <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                        {isNew && <NewDot />}
                         {r.company}
                         {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
                       </span>
@@ -448,13 +460,23 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
       <div className="md:hidden space-y-3">
         {items.map((r, i) => {
           const isOpen = expanded === i;
+          const isNew = isNewRow?.(r) ?? false;
           return (
-            <div key={i} className="border border-gray-200 rounded-xl overflow-hidden">
-              <div onClick={() => setExpanded(isOpen ? null : i)} className="p-4 cursor-pointer">
+            <div
+              key={i}
+              className={`border rounded-xl overflow-hidden transition-colors ${
+                isNew ? "border-blue-200 bg-blue-50" : "border-gray-200"
+              }`}
+            >
+              <div
+                onClick={() => { onSeen?.(r.id); setExpanded(isOpen ? null : i); }}
+                className="p-4 cursor-pointer"
+              >
                 <div className="flex justify-between items-start gap-2">
                   <div className="min-w-0">
                     <div className="font-medium text-gray-900 flex items-center gap-1.5 break-words">
                       <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                      {isNew && <NewDot />}
                       <span className="break-words">{r.company}</span>
                       {r.merged && <span className="text-indigo-400"><LinkIcon /></span>}
                     </div>

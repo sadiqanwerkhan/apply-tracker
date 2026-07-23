@@ -15,6 +15,7 @@ export type Row = {
   sender: string;
   firstSeen: string;
   lastSeen: string;
+  lastActivityAt: number;
   note: string;
   currentStage: string;
   timeline: TimelineEntry[];
