@@ -81,9 +81,31 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             )}
           </div>
 
+          {!busy && app.newCount > 0 && (
+            <div className="flex items-center justify-between gap-3 mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+              <span className="inline-flex items-center gap-2 text-sm text-blue-800">
+                <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
+                {app.newCount} {app.newCount === 1 ? "application has" : "applications have"} new activity
+              </span>
+              <button
+                onClick={app.markAllSeen}
+                className="text-sm font-medium text-blue-700 hover:text-blue-900 shrink-0"
+              >
+                Mark all as read
+              </button>
+            </div>
+          )}
+
           <SearchSort search={app.search} sortBy={app.sortBy} scanning={busy} onSearch={app.setSearch} onSort={app.setSortBy} />
           {app.scanning && <ScanningQuote />}
-          <ApplicationsTable items={app.pageItems} allRows={app.allRows} scanning={busy} emptyMessage={emptyMessage} isNewRow={app.isNewRow} onSeen={app.markSeen} />
+          <ApplicationsTable
+            items={app.pageItems}
+            allRows={app.allRows}
+            scanning={busy}
+            emptyMessage={emptyMessage}
+            isNewRow={app.isNewRow}
+            onSeen={app.markSeen}
+          />
           {!busy && <Pagination page={app.page} totalPages={app.totalPages} onChange={app.setPage} />}
         </div>
       </div>
