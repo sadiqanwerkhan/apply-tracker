@@ -3,20 +3,75 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* shadcn-style tokens used by the landing page, tuned to an indigo theme */
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+
+  --primary: #4f46e5;            /* indigo-600 */
+  --primary-foreground: #ffffff;
+
+  --secondary: #f1f5f9;          /* slate-100 */
+  --secondary-foreground: #1e293b;
+
+  --muted: #f8fafc;              /* slate-50 */
+  --muted-foreground: #64748b;   /* slate-500 */
+
+  --accent: #eef2ff;             /* indigo-50 */
+  --accent-foreground: #3730a3;  /* indigo-800 */
+
+  --destructive: #ef4444;        /* red-500 */
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;             /* slate-200 */
+  --input: #e2e8f0;
+  --ring: #4f46e5;
+
+  --chart-1: #4f46e5;
+  --chart-2: #0ea5e9;
+  --chart-3: #22c55e;
+  --chart-4: #f59e0b;            /* amber — used for "Pending"/"Mixed" */
+  --chart-5: #ec4899;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
