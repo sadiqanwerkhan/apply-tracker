@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import { classify, extractCompany, extractRole, isPersonalSender } from "@/lib/classify";
+import { classify, extractCompany, extractRole, isPersonalSender, isBulkNoise  } from "@/lib/classify";
 import { aiClassifyBatch, stageToStatus, Stage } from "@/lib/aiClassify";
 import { prisma } from "@/lib/prisma";
 import { normalizeCompanyKey, normalizeRoleKey, companyKeysMatch } from "@/lib/aggregate";
@@ -196,6 +196,16 @@ export async function runScanChunk(
     const date = parseInt(msg.internalDate, 10);
 
     if (isPersonalSender(from)) {
+      skipIds.push(msg.id);
+      continue;
+    }
+        // PRE-FILTER: drop obvious bulk/marketing noise before it ever reaches the
+    // AI. Conservative by design — only provably-non-application mail is dropped
+    // here. A keyword rejection check below still runs on anything that stays,
+    // so we never drop a real rejection. This is a pure cost/speed optimization.
+    const rawSubject = subject;
+    if (isBulkNoise(from, rawSubject) && classify(`${rawSubject} ${getBodyText(msg.payload)}`.toLowerCase()) === "None") {
+      console.log(`ScanChunk: pre-filter drop [bulk noise] ${rawSubject}`);
       skipIds.push(msg.id);
       continue;
     }

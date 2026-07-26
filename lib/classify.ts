@@ -184,3 +184,49 @@ export function isPersonalSender(from: string): boolean {
   // match service domains as exact or subdomain (e.g. notifications.github.com)
   return SERVICE_DOMAINS.some((d) => domain === d || domain.endsWith("." + d));
 }
+
+// ── Pre-filter noise detector ────────────────────────────────────────────────
+// Returns true only for email that is PROVABLY not a job application — bulk
+// marketing / newsletters / digests. Used to drop obvious noise BEFORE the AI
+// call, to cut cost and time. It must be conservative: when in doubt, return
+// false so the email still goes to Claude. It never positively classifies
+// anything — it only says "this is clearly not worth classifying".
+const NOISE_SUBJECT_PATTERNS = [
+  "unsubscribe",
+  "newsletter",
+  "weekly digest",
+  "daily digest",
+  "job alert",
+  "jobs for you",
+  "new jobs matching",
+  "recommended jobs",
+  "trending",
+  "webinar",
+  "sale",
+  "% off",
+  "discount",
+  "promo",
+  "black friday",
+  "cyber monday",
+  "flash sale",
+];
+
+// Bulk-mail infra sub-strings that appear in the From address of marketing blasts.
+const NOISE_SENDER_HINTS = [
+  "newsletter@",
+  "noreply@substack",
+  "email.mailchimp",
+  "sendgrid.net",
+  "mailchimpapp",
+  "marketing@",
+  "notifications@medium",
+  "digest@",
+];
+
+export function isBulkNoise(from: string, subject: string): boolean {
+  const f = from.toLowerCase();
+  const s = subject.toLowerCase();
+  if (NOISE_SENDER_HINTS.some((h) => f.includes(h))) return true;
+  if (NOISE_SUBJECT_PATTERNS.some((p) => s.includes(p))) return true;
+  return false;
+}
