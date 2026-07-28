@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useApplications } from "@/hooks/useApplications";
 import ScanControls from "@/components/ScanControls";
 import FilterPills from "@/components/FilterPills";
@@ -20,6 +21,53 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
   const app = useApplications();
   const busy = app.initialLoading || app.scanning;
 
+  const [reclassifying, setReclassifying] = useState(false);
+  const [reclassMsg, setReclassMsg] = useState("");
+
+  async function reclassifyAll() {
+    if (!confirm("Re-check all stored emails with the latest classification logic? This won't delete anything.")) return;
+
+    setReclassifying(true);
+    setReclassMsg("Re-checking…");
+
+    let cursor: string | null = null;
+    let total = 0;
+
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const res: Response = await fetch("/api/reclassify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cursor }),
+        });
+
+        const d = await res.json();
+
+        if (d.error) {
+          setReclassMsg("Failed. Try again.");
+          break;
+        }
+
+        total += d.updated || 0;
+        setReclassMsg(`Re-checked… ${total} corrected so far`);
+
+        if (d.done) {
+          setReclassMsg(`Done — ${total} emails corrected. Refreshing…`);
+          break;
+        }
+
+        cursor = d.nextCursor;
+      }
+
+      setTimeout(() => window.location.reload(), 1000);
+    } catch {
+      setReclassMsg("Failed. Try again.");
+    } finally {
+      setReclassifying(false);
+    }
+  }
+
   const emptyMessage =
     app.counts.All === 0
       ? "No applications yet — run a scan to pull them in."
@@ -36,6 +84,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
                 Reconnect to keep scanning. This just refreshes your Google sign-in — your data stays intact.
               </p>
             </div>
+
             <form action={onReconnect}>
               <button
                 type="submit"
@@ -49,12 +98,32 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
 
         <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Apply Tracker</h1>
-            <p className="text-gray-500 mt-1 text-sm break-words">Signed in as {userEmail}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Apply Tracker
+            </h1>
+            <p className="text-gray-500 mt-1 text-sm break-words">
+              Signed in as {userEmail}
+            </p>
           </div>
-          <form action={onSignOut}>
-            <button type="submit" className="text-sm text-gray-400 hover:text-gray-600 shrink-0">Sign out</button>
-          </form>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={reclassifyAll}
+              disabled={reclassifying}
+              className="text-sm text-gray-400 hover:text-gray-600"
+            >
+              {reclassifying ? reclassMsg : "Re-check classifications"}
+            </button>
+
+            <form action={onSignOut}>
+              <button
+                type="submit"
+                className="text-sm text-gray-400 hover:text-gray-600 shrink-0"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
 
         <ScanControls
@@ -68,16 +137,36 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           onScan={app.runScan}
         />
 
-        {!busy && <StatsSummary rows={app.allRows}
-        onFilterStatus={(s) => { app.setInterviewedOnly(false); app.setStatusFilter(s); }}
-          onFilterInterviewed={() => { app.setStatusFilter("All"); app.setInterviewedOnly(true); }}
-          />}
+        {!busy && (
+          <StatsSummary
+            rows={app.allRows}
+            onFilterStatus={(s) => {
+              app.setInterviewedOnly(false);
+              app.setStatusFilter(s);
+            }}
+            onFilterInterviewed={() => {
+              app.setStatusFilter("All");
+              app.setInterviewedOnly(true);
+            }}
+          />
+        )}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
-            <FilterPills active={app.statusFilter} counts={app.counts} scanning={busy} onChange={app.setStatusFilter} />
+            <FilterPills
+              active={app.statusFilter}
+              counts={app.counts}
+              scanning={busy}
+              onChange={app.setStatusFilter}
+            />
+
             {!busy && (
-              <ExportControls allRows={app.allRows} visibleRows={app.filtered} statusFilter={app.statusFilter} search={app.search} />
+              <ExportControls
+                allRows={app.allRows}
+                visibleRows={app.filtered}
+                statusFilter={app.statusFilter}
+                search={app.search}
+              />
             )}
           </div>
 
@@ -87,6 +176,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
                 <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
                 {app.newCount} {app.newCount === 1 ? "application has" : "applications have"} new activity
               </span>
+
               <button
                 onClick={app.markAllSeen}
                 className="text-sm font-medium text-blue-700 hover:text-blue-900 shrink-0"
@@ -96,8 +186,16 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             </div>
           )}
 
-          <SearchSort search={app.search} sortBy={app.sortBy} scanning={busy} onSearch={app.setSearch} onSort={app.setSortBy} />
+          <SearchSort
+            search={app.search}
+            sortBy={app.sortBy}
+            scanning={busy}
+            onSearch={app.setSearch}
+            onSort={app.setSortBy}
+          />
+
           {app.scanning && <ScanningQuote />}
+
           <ApplicationsTable
             items={app.pageItems}
             allRows={app.allRows}
@@ -106,7 +204,14 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             isNewRow={app.isNewRow}
             onSeen={app.markSeen}
           />
-          {!busy && <Pagination page={app.page} totalPages={app.totalPages} onChange={app.setPage} />}
+
+          {!busy && (
+            <Pagination
+              page={app.page}
+              totalPages={app.totalPages}
+              onChange={app.setPage}
+            />
+          )}
         </div>
       </div>
     </main>
