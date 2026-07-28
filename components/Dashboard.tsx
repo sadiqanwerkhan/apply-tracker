@@ -10,6 +10,7 @@ import Pagination from "@/components/Pagination";
 import ExportControls from "@/components/ExportControls";
 import ScanningQuote from "@/components/ScanningQuote";
 import StatsSummary from "@/components/StatsSummary";
+import Button from "@/components/ui/Button";
 
 type Props = {
   userEmail: string;
@@ -107,21 +108,12 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={reclassifyAll}
-              disabled={reclassifying}
-              className="text-sm text-gray-400 hover:text-gray-600"
-            >
-              {reclassifying ? reclassMsg : "Re-check classifications"}
-            </button>
+          <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
+            {reclassifying ? reclassMsg : "Re-check classifications"}
+          </Button>
 
             <form action={onSignOut}>
-              <button
-                type="submit"
-                className="text-sm text-gray-400 hover:text-gray-600 shrink-0"
-              >
-                Sign out
-              </button>
+              <Button type="submit" variant="secondary" size="sm">Sign out</Button>
             </form>
           </div>
         </div>
