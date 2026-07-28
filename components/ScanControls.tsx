@@ -8,6 +8,7 @@ type Props = {
   onEnd: (v: string) => void;
   onScan: () => void;
 };
+import Button from "@/components/ui/Button";
 
 export default function ScanControls({ startDate, endDate, scanning, error, progress, onStart, onEnd, onScan }: Props) {
   const total = progress ? progress.processed + progress.remaining : 0;
@@ -26,10 +27,9 @@ export default function ScanControls({ startDate, endDate, scanning, error, prog
           <input type="date" value={endDate} onChange={(e) => onEnd(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-gray-700" />
         </div>
-        <button onClick={onScan} disabled={scanning}
-          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-medium px-6 py-2 rounded-lg transition">
+        <Button onClick={onScan} disabled={scanning} loading={scanning} variant="primary" size="md">
           {scanning ? "Scanning…" : "Scan my applications"}
-        </button>
+        </Button>
       </div>
 
       {scanning && progress && total > 0 && (
