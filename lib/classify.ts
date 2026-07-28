@@ -5,7 +5,7 @@
  */
 
 export const REJECT_PHRASES = [
-  "unfortunately", "we have decided to", "not be moving forward", "will not be proceeding",
+  "not be moving forward", "will not be proceeding",
   "decided to move forward with other", "other candidates", "not selected", "regret to inform",
   "we will not be progressing", "won't be moving forward", "decided not to proceed",
   "unable to offer", "position has been filled", "pursue other candidates",
