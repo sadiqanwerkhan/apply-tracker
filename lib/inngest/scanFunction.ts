@@ -12,7 +12,6 @@ export const scanInbox = inngest.createFunction(
     onFailure: async ({ event, error }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const jobId = (event as any)?.data?.event?.data?.jobId;
-      if (!jobId) return;
       const raw = String(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (error as any)?.message || error || "unknown error"
@@ -27,6 +26,22 @@ export const scanInbox = inngest.createFunction(
         raw.includes("no_google_account") ||
         raw.includes("invalid_request") ||
         raw.toLowerCase().includes("token has been expired or revoked");
+
+      // Report REAL failures to Sentry so you get alerted with a stack trace.
+      // Skip the expected token-expiry case — the user self-heals it via the
+      // Reconnect button, so it isn't worth an alert.
+      if (!isAuth) {
+        try {
+          const Sentry = await import("@sentry/nextjs");
+          Sentry.captureException(error, {
+            tags: { area: "scan", jobId: jobId ?? "unknown" },
+          });
+        } catch {
+          // Sentry not configured (e.g. local dev without DSN) — ignore.
+        }
+      }
+
+      if (!jobId) return;
 
       await prisma.scanJob.update({
         where: { id: jobId },
