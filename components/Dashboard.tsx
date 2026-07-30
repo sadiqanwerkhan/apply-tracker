@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApplications } from "@/hooks/useApplications";
 import ScanControls from "@/components/ScanControls";
 import FilterPills from "@/components/FilterPills";
@@ -25,9 +25,24 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
   const [reclassifying, setReclassifying] = useState(false);
   const [reclassMsg, setReclassMsg] = useState("");
 
+  // account overflow menu (mobile)
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [menuOpen]);
+
   async function reclassifyAll() {
     if (!confirm("Re-check all stored emails with the latest classification logic? This won't delete anything.")) return;
 
+    setMenuOpen(false);
     setReclassifying(true);
     setReclassMsg("Re-checking…");
 
@@ -97,7 +112,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
+        <div className="flex items-start justify-between gap-3 mb-6 sm:mb-8">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               Apply Tracker
@@ -107,14 +122,52 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-          <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
-            {reclassifying ? reclassMsg : "Re-check classifications"}
-          </Button>
-
+          {/* DESKTOP: buttons inline */}
+          <div className="hidden sm:flex items-center gap-3 shrink-0">
+            <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
+              {reclassifying ? reclassMsg : "Re-check classifications"}
+            </Button>
             <form action={onSignOut}>
               <Button type="submit" variant="secondary" size="sm">Sign out</Button>
             </form>
+          </div>
+
+          {/* MOBILE: overflow menu */}
+          <div className="sm:hidden relative shrink-0" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label="Account menu"
+              aria-expanded={menuOpen}
+              className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+            >
+              {/* three-dot icon */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5" r="1.6" />
+                <circle cx="12" cy="12" r="1.6" />
+                <circle cx="12" cy="19" r="1.6" />
+              </svg>
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 bg-white shadow-lg z-20 overflow-hidden">
+                <button
+                  onClick={reclassifyAll}
+                  disabled={reclassifying}
+                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {reclassifying ? reclassMsg : "Re-check classifications"}
+                </button>
+                <div className="border-t border-gray-100" />
+                <form action={onSignOut}>
+                  <button
+                    type="submit"
+                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
 
