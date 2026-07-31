@@ -22,6 +22,9 @@ type AppT = {
   analysisAt: string | null;
   insights: Insights | null;
   insightsAt: string | null;
+  jobTitle: string | null;
+  jobLocation: string | null;
+  jobDescription: string | null;
   stages: StageT[];
 };
 
@@ -111,6 +114,13 @@ export default function ApplicationDetail({ application }: { application: AppT }
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{application.company}</h1>
           {application.role && <p className="text-gray-500 mt-1 break-words">{application.role}</p>}
         </div>
+
+        <JobDescriptionCard
+          applicationId={application.id}
+          jobTitle={application.jobTitle}
+          jobLocation={application.jobLocation}
+          jobDescription={application.jobDescription}
+        />
 
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">Interview stages</h2>
 
@@ -463,6 +473,88 @@ function CollapsibleSection({ section, defaultOpen }: { section: AnalysisSection
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function JobDescriptionCard({
+  applicationId, jobTitle, jobLocation, jobDescription,
+}: {
+  applicationId: string;
+  jobTitle: string | null;
+  jobLocation: string | null;
+  jobDescription: string | null;
+}) {
+  const router = useRouter();
+  const hasJD = !!(jobDescription && jobDescription.trim());
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(jobTitle || "");
+  const [location, setLocation] = useState(jobLocation || "");
+  const [desc, setDesc] = useState(jobDescription || "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/application/job-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId, jobTitle: title, jobLocation: location, jobDescription: desc }),
+      });
+      if (res.ok) { setOpen(false); router.refresh(); }
+      else alert("Could not save. Please try again.");
+    } catch {
+      alert("Could not save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // collapsed state
+  if (!open) {
+    return (
+      <div className="mb-6 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-indigo-900">
+            {hasJD ? "Job description added" : "Add the job description for sharper results"}
+          </p>
+          <p className="text-xs text-indigo-700/70 mt-0.5">
+            {hasJD
+              ? "Your analysis and interview prep use it."
+              : "Optional — paste the JD and your analysis and prep become tailored to this role."}
+          </p>
+        </div>
+        <button
+          onClick={() => setOpen(true)}
+          className="bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 text-sm font-medium px-4 py-2 rounded-lg shrink-0"
+        >
+          {hasJD ? "Edit job description" : "Add job description"}
+        </button>
+      </div>
+    );
+  }
+
+  // expanded editor
+  return (
+    <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+      <h2 className="text-sm font-semibold text-gray-800 mb-3">Job description</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job title (optional)" className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location (optional)" className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <textarea
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder="Paste the full job description here…"
+        rows={8}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-3"
+      />
+      <div className="flex gap-2 mt-3">
+        <button onClick={save} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button onClick={() => setOpen(false)} disabled={saving} className="text-sm text-gray-500 px-3">Cancel</button>
+      </div>
     </div>
   );
 }

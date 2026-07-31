@@ -32,6 +32,9 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
     analysisAt: app.analysisAt ? app.analysisAt.toISOString() : null,
     insights: (app.insights as unknown as Insights | null) ?? null,
     insightsAt: app.insightsAt ? app.insightsAt.toISOString() : null,
+    jobTitle: app.jobTitle ?? null,
+    jobLocation: app.jobLocation ?? null,
+    jobDescription: app.jobDescription ?? null,
     stages: app.stages.map((s) => ({
       id: s.id,
       name: s.name,
