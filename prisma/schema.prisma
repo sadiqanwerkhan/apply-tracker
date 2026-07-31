@@ -139,7 +139,10 @@ model Application {
 
   analysis      String?
   analysisAt    DateTime?
+  insights      Json?        // ← ADD: structured interview facts (stack, team, product, pay, next steps)
+  insightsAt    DateTime?
   createdAt     DateTime  @default(now())
+
 
   emails        Email[]
   stages        Stage[]
