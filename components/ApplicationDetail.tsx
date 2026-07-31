@@ -3,6 +3,14 @@
 import { useState, useCallback, useMemo, memo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <span className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-180" : ""}`}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+    </span>
+  );
+}
+
 type Insights = {
   techStack?: string[];
   teamSize?: string;
@@ -60,9 +68,11 @@ export default function ApplicationDetail({ application }: { application: AppT }
 
   const [analysis, setAnalysis] = useState<string | null>(application.analysis);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
 
   const [insights, setInsights] = useState<Insights | null>(application.insights);
   const [extracting, setExtracting] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
 
   const totalTranscripts = useMemo(
     () => application.stages.reduce((n, s) => n + s.transcripts.length, 0),
@@ -78,7 +88,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
         body: JSON.stringify({ applicationId: application.id }),
       });
       const data = await res.json();
-      if (res.ok && data.analysis) setAnalysis(data.analysis);
+      if (res.ok && data.analysis) { setAnalysis(data.analysis); setAnalysisOpen(true); }
       else alert(data.error === "no_analysis" ? "Add at least one transcript first." : "Analysis failed. Please try again.");
     } catch {
       alert("Analysis failed. Please try again.");
@@ -96,7 +106,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
         body: JSON.stringify({ applicationId: application.id }),
       });
       const data = await res.json();
-      if (res.ok && data.insights) setInsights(data.insights);
+      if (res.ok && data.insights) { setInsights(data.insights); setInsightsOpen(true); }
       else alert(data.error === "no_insights" ? "Add at least one transcript first." : "Could not extract insights. Please try again.");
     } catch {
       alert("Could not extract insights. Please try again.");
@@ -174,26 +184,39 @@ export default function ApplicationDetail({ application }: { application: AppT }
               <h2 className="text-sm font-semibold text-gray-800">Interview analysis</h2>
               <p className="text-xs text-gray-500 mt-0.5">AI reviews all your transcripts for this application and highlights patterns.</p>
             </div>
-            <button
-              onClick={runAnalysis}
-              disabled={analyzing || totalTranscripts === 0}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60 shrink-0"
-            >
-              {analyzing ? "Analyzing…" : analysis ? "Re-analyze" : "Analyze my interviews"}
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={runAnalysis}
+                disabled={analyzing || totalTranscripts === 0}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+              >
+                {analyzing ? "Analyzing…" : analysis ? "Re-analyze" : "Analyze my interviews"}
+              </button>
+              {analysis && (
+                <button onClick={() => setAnalysisOpen((o) => !o)} className="p-2 rounded-lg hover:bg-gray-100" aria-label={analysisOpen ? "Collapse" : "Expand"}>
+                  <Chevron open={analysisOpen} />
+                </button>
+              )}
+            </div>
           </div>
 
           {totalTranscripts === 0 && (
             <p className="text-xs text-gray-400 mt-3">Add at least one transcript above to enable analysis.</p>
           )}
 
-          {analysis && (
+          {analysis && analysisOpen && (
             <div className="mt-4 border-t border-gray-100 pt-4">
               <AnalysisView raw={analysis} />
               <p className="text-[11px] text-gray-400 mt-4">
                 Based on your recorded conversations, including the interviewers&apos; responses. It reflects how the discussions went, not any private post-interview decision.
               </p>
             </div>
+          )}
+
+          {analysis && !analysisOpen && (
+            <button onClick={() => setAnalysisOpen(true)} className="mt-3 text-sm text-indigo-600 hover:underline">
+              Show analysis
+            </button>
           )}
         </div>
 
@@ -204,20 +227,33 @@ export default function ApplicationDetail({ application }: { application: AppT }
               <h2 className="text-sm font-semibold text-gray-800">Interview insights</h2>
               <p className="text-xs text-gray-500 mt-0.5">Key facts pulled from your transcripts — stack, team, product, comp, and next steps.</p>
             </div>
-            <button
-              onClick={runInsights}
-              disabled={extracting || totalTranscripts === 0}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60 shrink-0"
-            >
-              {extracting ? "Extracting…" : insights ? "Refresh insights" : "Extract insights"}
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={runInsights}
+                disabled={extracting || totalTranscripts === 0}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+              >
+                {extracting ? "Extracting…" : insights ? "Refresh insights" : "Extract insights"}
+              </button>
+              {insights && (
+                <button onClick={() => setInsightsOpen((o) => !o)} className="p-2 rounded-lg hover:bg-gray-100" aria-label={insightsOpen ? "Collapse" : "Expand"}>
+                  <Chevron open={insightsOpen} />
+                </button>
+              )}
+            </div>
           </div>
 
           {totalTranscripts === 0 && (
             <p className="text-xs text-gray-400 mt-3">Add at least one transcript above to enable insights.</p>
           )}
 
-          {insights && <InsightsView insights={insights} />}
+          {insights && insightsOpen && <InsightsView insights={insights} />}
+
+          {insights && !insightsOpen && (
+            <button onClick={() => setInsightsOpen(true)} className="mt-3 text-sm text-indigo-600 hover:underline">
+              Show insights
+            </button>
+          )}
         </div>
       </div>
     </main>
@@ -233,6 +269,7 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
 
   const [prep, setPrep] = useState<Prep | null>(null);
   const [prepping, setPrepping] = useState(false);
+  const [prepOpen, setPrepOpen] = useState(false);
 
   const isUpcoming = stage.transcripts.length === 0;
 
@@ -245,7 +282,7 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
         body: JSON.stringify({ applicationId, stageId: stage.id }),
       });
       const data = await res.json();
-      if (res.ok && data.prep) setPrep(data.prep);
+      if (res.ok && data.prep) { setPrep(data.prep); setPrepOpen(true); }
       else alert("Could not generate prep. Please try again.");
     } catch {
       alert("Could not generate prep. Please try again.");
@@ -306,8 +343,13 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
                 {prepping ? "Preparing…" : "Prep me"}
               </button>
             </div>
+          ) : prepOpen ? (
+            <PrepView prep={prep} onRegenerate={runPrep} regenerating={prepping} onCollapse={() => setPrepOpen(false)} />
           ) : (
-            <PrepView prep={prep} onRegenerate={runPrep} regenerating={prepping} />
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 flex items-center justify-between gap-3">
+              <span className="text-sm text-indigo-900 font-medium">Interview prep ready</span>
+              <button onClick={() => setPrepOpen(true)} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium shrink-0">Show prep</button>
+            </div>
           )}
         </div>
       )}
@@ -611,7 +653,7 @@ function JobDescriptionCard({
   );
 }
 
-function PrepView({ prep, onRegenerate, regenerating }: { prep: Prep; onRegenerate: () => void; regenerating: boolean }) {
+function PrepView({ prep, onRegenerate, regenerating, onCollapse }: { prep: Prep; onRegenerate: () => void; regenerating: boolean; onCollapse: () => void }) {
   const blocks: { label: string; items: string[]; badge: string; dot: string }[] = [];
   if (prep.focusAreas?.length) blocks.push({ label: "What to cover", items: prep.focusAreas, badge: "bg-indigo-100 text-indigo-600", dot: "bg-indigo-500" });
   if (prep.questionsToAsk?.length) blocks.push({ label: "Smart questions to ask", items: prep.questionsToAsk, badge: "bg-emerald-100 text-emerald-600", dot: "bg-emerald-500" });
@@ -626,9 +668,14 @@ function PrepView({ prep, onRegenerate, regenerating }: { prep: Prep; onRegenera
           </span>
           <h4 className="text-sm font-semibold text-indigo-900">Interview prep</h4>
         </div>
-        <button onClick={onRegenerate} disabled={regenerating} className="text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50 shrink-0">
-          {regenerating ? "Refreshing…" : "Regenerate"}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={onRegenerate} disabled={regenerating} className="text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50">
+            {regenerating ? "Refreshing…" : "Regenerate"}
+          </button>
+          <button onClick={onCollapse} className="p-1.5 rounded-lg hover:bg-indigo-100/60" aria-label="Collapse">
+            <Chevron open={true} />
+          </button>
+        </div>
       </div>
 
       {prep.encouragement && (
