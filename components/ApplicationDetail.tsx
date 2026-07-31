@@ -1,12 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useMemo, memo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
+type Insights = {
+  techStack?: string[];
+  teamSize?: string;
+  teamStructure?: string;
+  product?: string;
+  payRange?: string;
+  nextSteps?: string;
+  notes?: string[];
+};
 type TranscriptT = { id: string; label: string | null; content: string };
 type StageT = { id: string; name: string; order: number; result: string | null; transcripts: TranscriptT[] };
-type AppT = { id: string; company: string; role: string; analysis: string | null; analysisAt: string | null; stages: StageT[] };
+type AppT = {
+  id: string;
+  company: string;
+  role: string;
+  analysis: string | null;
+  analysisAt: string | null;
+  insights: Insights | null;
+  insightsAt: string | null;
+  stages: StageT[];
+};
 
 type Caller = (url: string, method: string, body: object) => Promise<void>;
 
@@ -16,7 +33,9 @@ export default function ApplicationDetail({ application }: { application: AppT }
   const [newStage, setNewStage] = useState("");
   const [addingStage, setAddingStage] = useState(false);
 
-  const call: Caller = async (url, method, body) => {
+  // Stable identity so memoized StageCard/TranscriptItem children don't re-render
+  // on every parent render — only when they actually receive changed props.
+  const call = useCallback<Caller>(async (url, method, body) => {
     setBusy(true);
     try {
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -27,12 +46,18 @@ export default function ApplicationDetail({ application }: { application: AppT }
     } finally {
       setBusy(false);
     }
-  };
+  }, [router]);
 
   const [analysis, setAnalysis] = useState<string | null>(application.analysis);
   const [analyzing, setAnalyzing] = useState(false);
 
-  const totalTranscripts = application.stages.reduce((n, s) => n + s.transcripts.length, 0);
+  const [insights, setInsights] = useState<Insights | null>(application.insights);
+  const [extracting, setExtracting] = useState(false);
+
+  const totalTranscripts = useMemo(
+    () => application.stages.reduce((n, s) => n + s.transcripts.length, 0),
+    [application.stages]
+  );
 
   async function runAnalysis() {
     setAnalyzing(true);
@@ -49,6 +74,24 @@ export default function ApplicationDetail({ application }: { application: AppT }
       alert("Analysis failed. Please try again.");
     } finally {
       setAnalyzing(false);
+    }
+  }
+
+  async function runInsights() {
+    setExtracting(true);
+    try {
+      const res = await fetch("/api/application/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: application.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.insights) setInsights(data.insights);
+      else alert(data.error === "no_insights" ? "Add at least one transcript first." : "Could not extract insights. Please try again.");
+    } catch {
+      alert("Could not extract insights. Please try again.");
+    } finally {
+      setExtracting(false);
     }
   }
 
@@ -135,12 +178,35 @@ export default function ApplicationDetail({ application }: { application: AppT }
             </div>
           )}
         </div>
+
+        {/* Interview insights */}
+        <div className="mt-6 bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-800">Interview insights</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Key facts pulled from your transcripts — stack, team, product, comp, and next steps.</p>
+            </div>
+            <button
+              onClick={runInsights}
+              disabled={extracting || totalTranscripts === 0}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60 shrink-0"
+            >
+              {extracting ? "Extracting…" : insights ? "Refresh insights" : "Extract insights"}
+            </button>
+          </div>
+
+          {totalTranscripts === 0 && (
+            <p className="text-xs text-gray-400 mt-3">Add at least one transcript above to enable insights.</p>
+          )}
+
+          {insights && <InsightsView insights={insights} />}
+        </div>
       </div>
     </main>
   );
 }
 
-function StageCard({ stage, isFirst, isLast, busy, onCall }: { stage: StageT; isFirst: boolean; isLast: boolean; busy: boolean; onCall: Caller }) {
+const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall }: { stage: StageT; isFirst: boolean; isLast: boolean; busy: boolean; onCall: Caller }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(stage.name);
   const [addingT, setAddingT] = useState(false);
@@ -204,9 +270,9 @@ function StageCard({ stage, isFirst, isLast, busy, onCall }: { stage: StageT; is
       )}
     </div>
   );
-}
+});
 
-function TranscriptItem({ transcript, busy, onCall }: { transcript: TranscriptT; busy: boolean; onCall: Caller }) {
+const TranscriptItem = memo(function TranscriptItem({ transcript, busy, onCall }: { transcript: TranscriptT; busy: boolean; onCall: Caller }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(transcript.content);
@@ -250,6 +316,58 @@ function TranscriptItem({ transcript, busy, onCall }: { transcript: TranscriptT;
         <pre className="text-sm text-gray-600 mt-2 whitespace-pre-wrap break-words font-sans max-h-96 overflow-y-auto">{transcript.content}</pre>
       ) : (
         <p className="text-sm text-gray-400 mt-1 break-words">{preview}</p>
+      )}
+    </div>
+  );
+});
+
+// ---------- Insights rendering ----------
+
+function InsightsView({ insights }: { insights: Insights }) {
+  const rows = useMemo(() => {
+    const out: { label: string; value: ReactNode }[] = [];
+    if (insights.techStack && insights.techStack.length > 0)
+      out.push({
+        label: "Tech stack",
+        value: (
+          <div className="flex flex-wrap gap-1.5">
+            {insights.techStack.map((t, i) => (
+              <span key={i} className="bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-0.5 text-xs font-medium">{t}</span>
+            ))}
+          </div>
+        ),
+      });
+    if (insights.teamSize) out.push({ label: "Team size", value: insights.teamSize });
+    if (insights.teamStructure) out.push({ label: "Team structure", value: insights.teamStructure });
+    if (insights.product) out.push({ label: "Product", value: insights.product });
+    if (insights.payRange) out.push({ label: "Pay range", value: insights.payRange });
+    if (insights.nextSteps) out.push({ label: "Next steps", value: insights.nextSteps });
+    return out;
+  }, [insights]);
+
+  const hasNotes = !!(insights.notes && insights.notes.length > 0);
+
+  if (rows.length === 0 && !hasNotes) {
+    return <p className="text-xs text-gray-400 mt-3">No specific details were found in the transcripts yet.</p>;
+  }
+
+  return (
+    <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+      {rows.map((r, i) => (
+        <div key={i} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 sm:w-32 shrink-0 pt-0.5">{r.label}</span>
+          <div className="text-sm text-gray-700 break-words flex-1">{r.value}</div>
+        </div>
+      ))}
+      {hasNotes && (
+        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 sm:w-32 shrink-0 pt-0.5">Notes</span>
+          <ul className="text-sm text-gray-700 space-y-1 flex-1">
+            {insights.notes!.map((n, i) => (
+              <li key={i} className="flex gap-2"><span className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-gray-400" /><span className="break-words">{n}</span></li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

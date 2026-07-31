@@ -3,6 +3,16 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { redirect, notFound } from "next/navigation";
 import ApplicationDetail from "@/components/ApplicationDetail";
 
+type Insights = {
+  techStack?: string[];
+  teamSize?: string;
+  teamStructure?: string;
+  product?: string;
+  payRange?: string;
+  nextSteps?: string;
+  notes?: string[];
+};
+
 export default async function ApplicationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getCurrentUser();
@@ -14,12 +24,14 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
   });
   if (!app || app.userId !== user.id) notFound();
 
-const data = {
+  const data = {
     id: app.id,
     company: app.company,
     role: app.role,
     analysis: app.analysis,
     analysisAt: app.analysisAt ? app.analysisAt.toISOString() : null,
+    insights: (app.insights as unknown as Insights | null) ?? null,
+    insightsAt: app.insightsAt ? app.insightsAt.toISOString() : null,
     stages: app.stages.map((s) => ({
       id: s.id,
       name: s.name,
