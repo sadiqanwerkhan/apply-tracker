@@ -137,10 +137,13 @@ model Application {
   mergedInto    Application?  @relation("AppMergeRel", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   mergedFrom    Application[] @relation("AppMergeRel")
 
-  analysis      String?
-  analysisAt    DateTime?
-  insights      Json?        // ← ADD: structured interview facts (stack, team, product, pay, next steps)
+  analysis       String?
+  analysisAt     DateTime?
+  insights      Json?
   insightsAt    DateTime?
+  jobTitle       String?
+  jobLocation    String?
+  jobDescription String?   @db.Text
   createdAt     DateTime  @default(now())
 
 
