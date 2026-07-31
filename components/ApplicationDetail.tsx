@@ -28,6 +28,13 @@ type AppT = {
   stages: StageT[];
 };
 
+type Prep = {
+  encouragement?: string;
+  focusAreas?: string[];
+  questionsToAsk?: string[];
+  watchOuts?: string[];
+};
+
 type Caller = (url: string, method: string, body: object) => Promise<void>;
 
 export default function ApplicationDetail({ application }: { application: AppT }) {
@@ -133,6 +140,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
               isLast={i === application.stages.length - 1}
               busy={busy}
               onCall={call}
+              applicationId={application.id}
             />
           ))}
           {application.stages.length === 0 && <p className="text-sm text-gray-400">No stages yet — add one below.</p>}
@@ -216,12 +224,35 @@ export default function ApplicationDetail({ application }: { application: AppT }
   );
 }
 
-const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall }: { stage: StageT; isFirst: boolean; isLast: boolean; busy: boolean; onCall: Caller }) {
+const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall, applicationId }: { stage: StageT; isFirst: boolean; isLast: boolean; busy: boolean; onCall: Caller; applicationId: string }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(stage.name);
   const [addingT, setAddingT] = useState(false);
   const [tContent, setTContent] = useState("");
   const [tLabel, setTLabel] = useState("");
+
+  const [prep, setPrep] = useState<Prep | null>(null);
+  const [prepping, setPrepping] = useState(false);
+
+  const isUpcoming = stage.transcripts.length === 0;
+
+  async function runPrep() {
+    setPrepping(true);
+    try {
+      const res = await fetch("/api/application/prep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId, stageId: stage.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.prep) setPrep(data.prep);
+      else alert("Could not generate prep. Please try again.");
+    } catch {
+      alert("Could not generate prep. Please try again.");
+    } finally {
+      setPrepping(false);
+    }
+  }
 
   async function rename() {
     if (!name.trim()) return;
@@ -259,6 +290,27 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
           </>
         )}
       </div>
+
+      {/* Prep card — only for upcoming rounds (no transcript yet) */}
+      {isUpcoming && (
+        <div className="mt-3">
+          {!prep ? (
+            <div className="rounded-lg border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600 shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                </span>
+                <p className="text-sm text-indigo-900 font-medium">Get ready for this round</p>
+              </div>
+              <button onClick={runPrep} disabled={prepping} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg disabled:opacity-60 shrink-0">
+                {prepping ? "Preparing…" : "Prep me"}
+              </button>
+            </div>
+          ) : (
+            <PrepView prep={prep} onRegenerate={runPrep} regenerating={prepping} />
+          )}
+        </div>
+      )}
 
       <div className="mt-3 space-y-2">
         {stage.transcripts.map((t) => (
@@ -554,6 +606,49 @@ function JobDescriptionCard({
           {saving ? "Saving…" : "Save"}
         </button>
         <button onClick={() => setOpen(false)} disabled={saving} className="text-sm text-gray-500 px-3">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function PrepView({ prep, onRegenerate, regenerating }: { prep: Prep; onRegenerate: () => void; regenerating: boolean }) {
+  const blocks: { label: string; items: string[]; badge: string; dot: string }[] = [];
+  if (prep.focusAreas?.length) blocks.push({ label: "What to cover", items: prep.focusAreas, badge: "bg-indigo-100 text-indigo-600", dot: "bg-indigo-500" });
+  if (prep.questionsToAsk?.length) blocks.push({ label: "Smart questions to ask", items: prep.questionsToAsk, badge: "bg-emerald-100 text-emerald-600", dot: "bg-emerald-500" });
+  if (prep.watchOuts?.length) blocks.push({ label: "Watch out for", items: prep.watchOuts, badge: "bg-amber-100 text-amber-600", dot: "bg-amber-500" });
+
+  return (
+    <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-white p-4">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600 shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>
+          </span>
+          <h4 className="text-sm font-semibold text-indigo-900">Interview prep</h4>
+        </div>
+        <button onClick={onRegenerate} disabled={regenerating} className="text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50 shrink-0">
+          {regenerating ? "Refreshing…" : "Regenerate"}
+        </button>
+      </div>
+
+      {prep.encouragement && (
+        <p className="text-sm text-gray-700 mb-3 break-words">{prep.encouragement}</p>
+      )}
+
+      <div className="space-y-3">
+        {blocks.map((b, i) => (
+          <div key={i}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{b.label}</p>
+            <ul className="space-y-1">
+              {b.items.map((it, j) => (
+                <li key={j} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
+                  <span className={`shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full ${b.dot}`} />
+                  <span className="break-words">{it}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </div>
   );
