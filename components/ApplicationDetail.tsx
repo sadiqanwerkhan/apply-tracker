@@ -282,9 +282,21 @@ export default function ApplicationDetail({ application }: { application: AppT }
   );
 }
 
+const TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "phone_screen", label: "Phone screen" },
+  { value: "technical", label: "Technical" },
+  { value: "system_design", label: "System design" },
+  { value: "cultural_fit", label: "Cultural fit" },
+  { value: "hr", label: "HR" },
+  { value: "final", label: "Final" },
+  { value: "other", label: "Other" },
+];
+const typeLabel = (t: string) => TYPE_OPTIONS.find((o) => o.value === t)?.label || "";
+
 const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall, applicationId }: { stage: StageT; isFirst: boolean; isLast: boolean; busy: boolean; onCall: Caller; applicationId: string }) {
-  const [renaming, setRenaming] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [name, setName] = useState(stage.name);
+  const [type, setType] = useState(stage.type || "other");
   const [addingT, setAddingT] = useState(false);
   const [tContent, setTContent] = useState("");
   const [tLabel, setTLabel] = useState("");
@@ -313,10 +325,15 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
     }
   }
 
-  async function rename() {
+  async function saveEdit() {
     if (!name.trim()) return;
-    await onCall("/api/stage", "PATCH", { id: stage.id, name: name.trim() });
-    setRenaming(false);
+    await onCall("/api/stage", "PATCH", { id: stage.id, name: name.trim(), type });
+    setEditing(false);
+  }
+  function cancelEdit() {
+    setName(stage.name);
+    setType(stage.type || "other");
+    setEditing(false);
   }
   async function del() {
     if (!window.confirm(`Delete the "${stage.name}" stage and its transcripts?`)) return;
@@ -331,30 +348,29 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-start justify-between gap-2">
-        {renaming ? (
-          <div className="flex items-center gap-2 flex-1 flex-wrap">
-            <input value={name} onChange={(e) => setName(e.target.value)} className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm" autoFocus />
-            <button onClick={rename} disabled={busy} className="text-sm text-indigo-600 font-medium">Save</button>
-            <button onClick={() => { setRenaming(false); setName(stage.name); }} className="text-sm text-gray-500">Cancel</button>
+        {editing ? (
+          <div className="flex-1 flex flex-col gap-2">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Round name (e.g. Technical round)" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" autoFocus />
+            <div className="flex items-center gap-2 flex-wrap">
+              <select value={type} onChange={(e) => setType(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
+                {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <button onClick={saveEdit} disabled={busy} className="text-sm text-indigo-600 font-medium">Save</button>
+              <button onClick={cancelEdit} className="text-sm text-gray-500">Cancel</button>
+            </div>
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <span className="font-semibold text-gray-800 break-words">{stage.name}</span>
-              <select
-                value={stage.type}
-                onChange={(e) => onCall("/api/stage", "PATCH", { id: stage.id, type: e.target.value })}
-                disabled={busy}
-                className="text-xs border border-gray-200 rounded-md px-1.5 py-0.5 bg-gray-50 text-gray-600"
-                title="Interview type"
-              >
-                {STAGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              {stage.type && stage.type !== "other" && (
+                <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{typeLabel(stage.type)}</span>
+              )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "up" })} disabled={busy || isFirst} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move up">▲</button>
               <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "down" })} disabled={busy || isLast} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move down">▼</button>
-              <button onClick={() => setRenaming(true)} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-gray-800">Rename</button>
+              <button onClick={() => setEditing(true)} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-gray-800">Edit</button>
               <button onClick={del} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-red-600">Delete</button>
             </div>
           </>

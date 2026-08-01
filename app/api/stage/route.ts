@@ -33,16 +33,7 @@ export async function PATCH(req: NextRequest) {
   const stage = await ownStage(user.id, String(body.id));
   if (!stage) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  if (typeof body.name === "string" && body.name.trim()) {
-    await prisma.stage.update({ where: { id: stage.id }, data: { name: body.name.trim() } });
-    return NextResponse.json({ ok: true });
-  }
-
-  if (typeof body.type === "string" && body.type.trim()) {
-    await prisma.stage.update({ where: { id: stage.id }, data: { type: body.type.trim() } });
-    return NextResponse.json({ ok: true });
-  }
-
+  // Reordering is its own operation.
   if (body.move === "up" || body.move === "down") {
     const neighbor = await prisma.stage.findFirst({
       where: {
@@ -60,6 +51,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // Otherwise update name and/or type together in one write.
+  const data: { name?: string; type?: string } = {};
+  if (typeof body.name === "string" && body.name.trim()) data.name = body.name.trim();
+  if (typeof body.type === "string" && body.type.trim()) data.type = body.type.trim();
+  if (Object.keys(data).length > 0) {
+    await prisma.stage.update({ where: { id: stage.id }, data });
+  }
   return NextResponse.json({ ok: true });
 }
 
