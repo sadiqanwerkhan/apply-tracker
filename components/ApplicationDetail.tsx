@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, memo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import LocationSelect from "@/components/LocationSelect";
 const STAGE_TYPES: { value: string; label: string }[] = [
   { value: "phone_screen", label: "Phone / Recruiter Screen" },
   { value: "technical", label: "Technical" },
@@ -666,7 +667,7 @@ function JobDescriptionCard({
       <h2 className="text-sm font-semibold text-gray-800 mb-3">Job description</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job title (optional)" className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location (optional)" className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        <LocationSelect value={location} onChange={setLocation} />
       </div>
       <textarea
         value={desc}
