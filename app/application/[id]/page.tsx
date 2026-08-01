@@ -38,6 +38,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
     stages: app.stages.map((s) => ({
       id: s.id,
       name: s.name,
+      type: s.type,
       order: s.order,
       result: s.result,
       transcripts: s.transcripts.map((t) => ({ id: t.id, label: t.label, content: t.content })),

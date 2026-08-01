@@ -19,11 +19,11 @@ export async function POST(req: NextRequest) {
   if (!app || app.userId !== user.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const last = await prisma.stage.findFirst({ where: { applicationId: app.id }, orderBy: { order: "desc" } });
-  await prisma.stage.create({ data: { applicationId: app.id, name: String(body.name), order: last ? last.order + 1 : 0 } });
+  await prisma.stage.create({ data: { applicationId: app.id, name: String(body.name), type: typeof body.type === "string" ? body.type : "other", order: last ? last.order + 1 : 0 } });
   return NextResponse.json({ ok: true });
 }
 
-// rename or reorder a stage
+// rename, change type, or reorder a stage
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -35,6 +35,11 @@ export async function PATCH(req: NextRequest) {
 
   if (typeof body.name === "string" && body.name.trim()) {
     await prisma.stage.update({ where: { id: stage.id }, data: { name: body.name.trim() } });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (typeof body.type === "string" && body.type.trim()) {
+    await prisma.stage.update({ where: { id: stage.id }, data: { type: body.type.trim() } });
     return NextResponse.json({ ok: true });
   }
 
