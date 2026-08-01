@@ -39,7 +39,44 @@ function hasRealInterview(row: Row): boolean {
   return (row.timeline || []).some((t) => !NON_INTERVIEW_STAGES.has(t.stage));
 }
 
+// The green "prep" dot signals an *active* interview loop: the current stage is an
+// interview stage and the application hasn't been rejected. This deliberately uses the
+// email-derived stage (the only signal present for every row — per-round Stages don't
+// exist until an application's detail page is opened). It points the user to the detail
+// page, where the precise per-round "Prep me" lives.
+const PREP_INTERVIEW_STAGES = new Set(["screening", "assessment", "interview"]);
+function needsPrep(row: Row): boolean {
+  return PREP_INTERVIEW_STAGES.has(row.currentStage) && row.status !== "Rejected";
+}
+
 const CHANNELS = ["LinkedIn", "WhatsApp", "Phone", "Indeed", "Email", "Other"];
+
+const INTERVIEW_STAGE_KEYS = ["screening", "assessment", "interview", "offer"];
+
+// Seed the detail page's stages from the email timeline, then navigate there.
+// Shared by the "Interview details" button and the prep nudge so they behave identically.
+async function seedAndOpen(row: Row, router: ReturnType<typeof useRouter>) {
+  sessionStorage.setItem("appsScroll", String(window.scrollY));
+  sessionStorage.setItem("appsExpandedKey", `${row.company}|||${row.role}`);
+  const seen = new Set<string>();
+  const seedStages: string[] = [];
+  for (const t of row.timeline || []) {
+    if (INTERVIEW_STAGE_KEYS.includes(t.stage) && !seen.has(t.stage)) {
+      seen.add(t.stage);
+      seedStages.push(STAGE_LABELS[t.stage] || t.stage);
+    }
+  }
+  try {
+    await fetch("/api/applications/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicationId: row.id, seedStages }),
+    });
+  } catch {
+    /* stages will seed on next open */
+  }
+  router.push(`/application/${row.id}`);
+}
 
 function LinkIcon() {
   return (
@@ -67,39 +104,26 @@ function CheckIcon() {
 function NewDot() {
   return <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" title="New activity" />;
 }
+function PrepDot() {
+  return (
+    <span className="relative flex h-2.5 w-2.5 shrink-0" title="Interview coming up — open to see prep">
+      <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60 animate-ping" />
+      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
+    </span>
+  );
+}
 
 const btnSecondary =
   "inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-gray-100 transition";
 const btnGhost = "text-xs text-gray-500 hover:text-gray-800 transition";
-
-const INTERVIEW_STAGE_KEYS = ["screening", "assessment", "interview", "offer"];
 
 function ViewDetailsButton({ row }: { row: Row }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function open() {
-    sessionStorage.setItem("appsScroll", String(window.scrollY));
-    sessionStorage.setItem("appsExpandedKey", `${row.company}|||${row.role}`);
     setLoading(true);
-    const seen = new Set<string>();
-    const seedStages: string[] = [];
-    for (const t of row.timeline || []) {
-      if (INTERVIEW_STAGE_KEYS.includes(t.stage) && !seen.has(t.stage)) {
-        seen.add(t.stage);
-        seedStages.push(STAGE_LABELS[t.stage] || t.stage);
-      }
-    }
-    try {
-      await fetch("/api/applications/open", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicationId: row.id, seedStages }),
-      });
-    } catch {
-      /* stages will seed on next open */
-    }
-    router.push(`/application/${row.id}`);
+    await seedAndOpen(row, router);
   }
 
   return (
@@ -121,6 +145,39 @@ function ViewDetailsButton({ row }: { row: Row }) {
         </div>
       )}
     </>
+  );
+}
+
+function PrepNudge({ row }: { row: Row }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function open() {
+    setLoading(true);
+    await seedAndOpen(row, router);
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 sm:p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-green-100 text-green-700 shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-green-900">You&apos;re in the interview stage</p>
+          <p className="text-xs text-green-700">Open this application to prep for your next round.</p>
+        </div>
+      </div>
+      <button
+        onClick={open}
+        disabled={loading}
+        className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg disabled:opacity-60 shrink-0"
+      >
+        {loading ? "Opening…" : "Prep for this interview →"}
+      </button>
+    </div>
   );
 }
 
@@ -326,6 +383,8 @@ function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
 
   return (
     <div className="px-4 sm:px-6 py-4 sm:py-5 bg-gray-50">
+      {needsPrep(row) && <PrepNudge row={row} />}
+
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-4">Application timeline</p>
       {row.timeline && row.timeline.length > 0 ? (
         <ol className="relative border-l-2 border-gray-200 ml-2">
@@ -434,6 +493,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                       <span className="inline-flex items-center gap-2">
                         <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
                         {isNew && <NewDot />}
+                        {!isOpen && needsPrep(r) && <PrepDot />}
                         {r.company}
                         {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
                       </span>
@@ -477,6 +537,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                     <div className="font-medium text-gray-900 flex items-center gap-1.5 break-words">
                       <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
                       {isNew && <NewDot />}
+                      {!isOpen && needsPrep(r) && <PrepDot />}
                       <span className="break-words">{r.company}</span>
                       {r.merged && <span className="text-indigo-400"><LinkIcon /></span>}
                     </div>
