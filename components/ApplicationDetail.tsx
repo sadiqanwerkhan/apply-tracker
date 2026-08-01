@@ -2,6 +2,18 @@
 
 import { useState, useCallback, useMemo, memo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+const STAGE_TYPES: { value: string; label: string }[] = [
+  { value: "phone_screen", label: "Phone / Recruiter Screen" },
+  { value: "technical", label: "Technical" },
+  { value: "system_design", label: "System Design" },
+  { value: "cultural_fit", label: "Cultural Fit" },
+  { value: "hr", label: "HR" },
+  { value: "final", label: "Final / Leadership" },
+  { value: "other", label: "Other" },
+];
+function stageTypeLabel(v: string) {
+  return STAGE_TYPES.find((t) => t.value === v)?.label || "Other";
+}
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -21,7 +33,7 @@ type Insights = {
   notes?: string[];
 };
 type TranscriptT = { id: string; label: string | null; content: string };
-type StageT = { id: string; name: string; order: number; result: string | null; transcripts: TranscriptT[] };
+type StageT = { id: string; name: string; type: string; order: number; result: string | null; transcripts: TranscriptT[] };
 type AppT = {
   id: string;
   company: string;
@@ -50,6 +62,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
   const [busy, setBusy] = useState(false);
   const [newStage, setNewStage] = useState("");
   const [addingStage, setAddingStage] = useState(false);
+  const [newStageType, setNewStageType] = useState("technical");
 
   // Stable identity so memoized StageCard/TranscriptItem children don't re-render
   // on every parent render — only when they actually receive changed props.
@@ -117,8 +130,9 @@ export default function ApplicationDetail({ application }: { application: AppT }
 
   async function addStage() {
     if (!newStage.trim()) return;
-    await call("/api/stage", "POST", { applicationId: application.id, name: newStage.trim() });
+    await call("/api/stage", "POST", { applicationId: application.id, name: newStage.trim(), type: newStageType });
     setNewStage("");
+    setNewStageType("technical");
     setAddingStage(false);
   }
 
@@ -166,9 +180,16 @@ export default function ApplicationDetail({ application }: { application: AppT }
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
               autoFocus
             />
+            <select
+              value={newStageType}
+              onChange={(e) => setNewStageType(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              {STAGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
             <div className="flex gap-2">
               <button onClick={addStage} disabled={busy} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">Add</button>
-              <button onClick={() => { setAddingStage(false); setNewStage(""); }} className="text-sm text-gray-500 px-2">Cancel</button>
+              <button onClick={() => { setAddingStage(false); setNewStage(""); setNewStageType("technical"); }} className="text-sm text-gray-500 px-2">Cancel</button>
             </div>
           </div>
         ) : (
@@ -317,7 +338,18 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
           </div>
         ) : (
           <>
-            <span className="font-semibold text-gray-800 break-words">{stage.name}</span>
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+              <span className="font-semibold text-gray-800 break-words">{stage.name}</span>
+              <select
+                value={stage.type}
+                onChange={(e) => onCall("/api/stage", "PATCH", { id: stage.id, type: e.target.value })}
+                disabled={busy}
+                className="text-xs border border-gray-200 rounded-md px-1.5 py-0.5 bg-gray-50 text-gray-600"
+                title="Interview type"
+              >
+                {STAGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
             <div className="flex items-center gap-1 shrink-0">
               <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "up" })} disabled={busy || isFirst} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move up">▲</button>
               <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "down" })} disabled={busy || isLast} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move down">▼</button>

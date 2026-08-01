@@ -158,6 +158,7 @@ model Stage {
   id            String       @id @default(cuid())
   applicationId String
   name          String
+  type          String       @default("other")
   order         Int          @default(0)
   result        String?
   createdAt     DateTime     @default(now())

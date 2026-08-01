@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     company: app.company,
     role: app.role,
     stageName: target.name,
+    stageType: target.type,
     jobDescription: app.jobDescription,
     priorTranscripts: prior,
   });
