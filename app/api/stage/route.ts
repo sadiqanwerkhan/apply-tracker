@@ -8,6 +8,12 @@ async function ownStage(userId: string, stageId: string) {
   return stage;
 }
 
+function parseScheduledAt(v: unknown): Date | null {
+  if (typeof v !== "string" || !v.trim()) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 // create a stage
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -19,11 +25,19 @@ export async function POST(req: NextRequest) {
   if (!app || app.userId !== user.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const last = await prisma.stage.findFirst({ where: { applicationId: app.id }, orderBy: { order: "desc" } });
-  await prisma.stage.create({ data: { applicationId: app.id, name: String(body.name), type: typeof body.type === "string" ? body.type : "other", order: last ? last.order + 1 : 0 } });
+  await prisma.stage.create({
+    data: {
+      applicationId: app.id,
+      name: String(body.name),
+      type: typeof body.type === "string" ? body.type : "other",
+      scheduledAt: parseScheduledAt(body.scheduledAt),
+      order: last ? last.order + 1 : 0,
+    },
+  });
   return NextResponse.json({ ok: true });
 }
 
-// rename, change type, or reorder a stage
+// rename, change type/schedule, or reorder a stage
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -51,10 +65,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Otherwise update name and/or type together in one write.
-  const data: { name?: string; type?: string } = {};
+  // Otherwise update name / type / scheduledAt together in one write.
+  const data: { name?: string; type?: string; scheduledAt?: Date | null } = {};
   if (typeof body.name === "string" && body.name.trim()) data.name = body.name.trim();
   if (typeof body.type === "string" && body.type.trim()) data.type = body.type.trim();
+  if ("scheduledAt" in body) data.scheduledAt = parseScheduledAt(body.scheduledAt);
   if (Object.keys(data).length > 0) {
     await prisma.stage.update({ where: { id: stage.id }, data });
   }

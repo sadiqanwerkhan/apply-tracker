@@ -15,6 +15,14 @@ const STAGE_TYPES: { value: string; label: string }[] = [
 function stageTypeLabel(v: string) {
   return STAGE_TYPES.find((t) => t.value === v)?.label || "Other";
 }
+// Format a stored ISO date for a <input type="datetime-local"> (which needs local wall-clock, no timezone).
+function toLocalInput(d: string | Date | null | undefined): string {
+  if (!d) return "";
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -34,7 +42,7 @@ type Insights = {
   notes?: string[];
 };
 type TranscriptT = { id: string; label: string | null; content: string };
-type StageT = { id: string; name: string; type: string; order: number; result: string | null; transcripts: TranscriptT[] };
+type StageT = { id: string; name: string; type: string; order: number; result: string | null; scheduledAt: string | null; transcripts: TranscriptT[] };
 type AppT = {
   id: string;
   company: string;
@@ -282,21 +290,11 @@ export default function ApplicationDetail({ application }: { application: AppT }
   );
 }
 
-const TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: "phone_screen", label: "Phone screen" },
-  { value: "technical", label: "Technical" },
-  { value: "system_design", label: "System design" },
-  { value: "cultural_fit", label: "Cultural fit" },
-  { value: "hr", label: "HR" },
-  { value: "final", label: "Final" },
-  { value: "other", label: "Other" },
-];
-const typeLabel = (t: string) => TYPE_OPTIONS.find((o) => o.value === t)?.label || "";
-
 const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall, applicationId }: { stage: StageT; isFirst: boolean; isLast: boolean; busy: boolean; onCall: Caller; applicationId: string }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(stage.name);
   const [type, setType] = useState(stage.type || "other");
+  const [scheduledLocal, setScheduledLocal] = useState(toLocalInput(stage.scheduledAt));
   const [addingT, setAddingT] = useState(false);
   const [tContent, setTContent] = useState("");
   const [tLabel, setTLabel] = useState("");
@@ -327,12 +325,13 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
 
   async function saveEdit() {
     if (!name.trim()) return;
-    await onCall("/api/stage", "PATCH", { id: stage.id, name: name.trim(), type });
+    await onCall("/api/stage", "PATCH", { id: stage.id, name: name.trim(), type, scheduledAt: scheduledLocal ? new Date(scheduledLocal).toISOString() : null });
     setEditing(false);
   }
   function cancelEdit() {
     setName(stage.name);
     setType(stage.type || "other");
+    setScheduledLocal(toLocalInput(stage.scheduledAt));
     setEditing(false);
   }
   async function del() {
@@ -352,8 +351,9 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
           <div className="flex-1 flex flex-col gap-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Round name (e.g. Technical round)" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" autoFocus />
             <div className="flex items-center gap-2 flex-wrap">
+              <input type="datetime-local" value={scheduledLocal} onChange={(e) => setScheduledLocal(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm" title="Interview date & time (optional)" />
               <select value={type} onChange={(e) => setType(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
-                {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {STAGE_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               <button onClick={saveEdit} disabled={busy} className="text-sm text-indigo-600 font-medium">Save</button>
               <button onClick={cancelEdit} className="text-sm text-gray-500">Cancel</button>
@@ -364,7 +364,12 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
             <div className="flex items-center gap-2 flex-wrap min-w-0">
               <span className="font-semibold text-gray-800 break-words">{stage.name}</span>
               {stage.type && stage.type !== "other" && (
-                <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{typeLabel(stage.type)}</span>
+                <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{stageTypeLabel(stage.type)}</span>
+              )}
+              {stage.scheduledAt && (
+                <span className="text-[11px] font-medium text-green-700 bg-green-50 rounded-full px-2 py-0.5 shrink-0">
+                  {new Date(stage.scheduledAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
