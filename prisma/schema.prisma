@@ -161,6 +161,7 @@ model Stage {
   type          String       @default("other")
   order         Int          @default(0)
   result        String?
+  scheduledAt DateTime?
   createdAt     DateTime     @default(now())
   application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   transcripts   Transcript[]

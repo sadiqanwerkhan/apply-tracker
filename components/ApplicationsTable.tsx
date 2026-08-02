@@ -492,7 +492,6 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                     <td className="py-3 px-3 font-medium text-gray-900">
                       <span className="inline-flex items-center gap-2">
                         <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                        {isNew && <NewDot />}
                         {!isOpen && needsPrep(r) && <PrepDot />}
                         {r.company}
                         {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
@@ -536,7 +535,6 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                   <div className="min-w-0">
                     <div className="font-medium text-gray-900 flex items-center gap-1.5 break-words">
                       <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                      {isNew && <NewDot />}
                       {!isOpen && needsPrep(r) && <PrepDot />}
                       <span className="break-words">{r.company}</span>
                       {r.merged && <span className="text-indigo-400"><LinkIcon /></span>}
