@@ -23,6 +23,17 @@ function activityTime(r: Row): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
+const INTERVIEW_SOON_MS = 48 * 60 * 60 * 1000; // 2 days
+
+// If a row has an imminent, unfilled interview (within 2 days and not yet passed),
+// return its timestamp so it can be floated to the top; otherwise null.
+function interviewSoonAt(r: Row, now: number): number | null {
+  if (r.nextInterviewAt == null) return null;
+  if (r.nextInterviewAt < now) return null;
+  if (r.nextInterviewAt - now > INTERVIEW_SOON_MS) return null;
+  return r.nextInterviewAt;
+}
+
 export function useApplications() {
   const router = useRouter();
   const pathname = usePathname();
@@ -38,6 +49,14 @@ export function useApplications() {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
   const [needsReconnect, setNeedsReconnect] = useState(false);
+
+  // Ticks every minute so imminent-interview rows re-sort to the top as their
+  // 2-day window opens or closes, without a page reload.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   // ── "New activity" tracking ──────────────────────────────────────────────
   // Per-application seen state: applicationId -> the activity timestamp at the
@@ -234,12 +253,21 @@ export function useApplications() {
       .filter((r) => !interviewedOnly || (r.timeline || []).some((t) => INTERVIEW_STAGES.has(t.stage)))
       .filter((r) => r.company.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => {
+        // Imminent interviews (within 2 days, still unfilled) float to the very top,
+        // soonest first — regardless of the chosen sort. Once the interview passes or
+        // a transcript is added, the row drops back into the normal order.
+        const ia = interviewSoonAt(a, now);
+        const ib = interviewSoonAt(b, now);
+        if (ia !== null && ib !== null) return ia - ib;
+        if (ia !== null) return -1;
+        if (ib !== null) return 1;
+
         if (sortBy === "company-asc") return a.company.localeCompare(b.company);
         // Sort by the REAL timestamp so same-day items order by time of arrival.
         if (sortBy === "date-asc") return activityTime(a) - activityTime(b);
         return activityTime(b) - activityTime(a);
       });
-  }, [rows, statusFilter, search, sortBy, interviewedOnly]);
+  }, [rows, statusFilter, search, sortBy, interviewedOnly, now]);
 
   const newCount = useMemo(
     () => filtered.filter((r) => isNewRow(r)).length,
