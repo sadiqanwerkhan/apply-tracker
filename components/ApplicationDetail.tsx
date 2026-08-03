@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, memo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import LocationSelect from "@/components/LocationSelect";
+import DateTimePicker from "@/components/DateTimePicker";
 const STAGE_TYPES: { value: string; label: string }[] = [
   { value: "phone_screen", label: "Phone / Recruiter Screen" },
   { value: "technical", label: "Technical" },
@@ -351,7 +352,7 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
           <div className="flex-1 flex flex-col gap-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Round name (e.g. Technical round)" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" autoFocus />
             <div className="flex items-center gap-2 flex-wrap">
-              <input type="datetime-local" value={scheduledLocal} onChange={(e) => setScheduledLocal(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm" title="Interview date & time (optional)" />
+            <DateTimePicker value={scheduledLocal} onChange={setScheduledLocal} />
               <select value={type} onChange={(e) => setType(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
                 {STAGE_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -375,7 +376,7 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
             <div className="flex items-center gap-1 shrink-0">
               <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "up" })} disabled={busy || isFirst} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move up">▲</button>
               <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "down" })} disabled={busy || isLast} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move down">▼</button>
-              <button onClick={() => setEditing(true)} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-gray-800">Edit</button>
+              <button onClick={() => { setName(stage.name); setType(stage.type || "other"); setScheduledLocal(toLocalInput(stage.scheduledAt)); setEditing(true); }} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-gray-800">Edit</button>
               <button onClick={del} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-red-600">Delete</button>
             </div>
           </>

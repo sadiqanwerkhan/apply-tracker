@@ -16,6 +16,10 @@ export type Row = {
   firstSeen: string;
   lastSeen: string;
   lastActivityAt: number;
+  // Soonest upcoming interview (ms epoch) that still has no transcript.
+  // null/undefined when there's no scheduled, unfilled, future round.
+  // Optional so aggregateApplications doesn't have to set it — rows.ts fills it in.
+  nextInterviewAt?: number | null;
   note: string;
   currentStage: string;
   timeline: TimelineEntry[];

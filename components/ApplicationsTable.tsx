@@ -39,14 +39,17 @@ function hasRealInterview(row: Row): boolean {
   return (row.timeline || []).some((t) => !NON_INTERVIEW_STAGES.has(t.stage));
 }
 
-// The green "prep" dot signals an *active* interview loop: the current stage is an
-// interview stage and the application hasn't been rejected. This deliberately uses the
-// email-derived stage (the only signal present for every row — per-round Stages don't
-// exist until an application's detail page is opened). It points the user to the detail
-// page, where the precise per-round "Prep me" lives.
-const PREP_INTERVIEW_STAGES = new Set(["screening", "assessment", "interview"]);
-function needsPrep(row: Row): boolean {
-  return PREP_INTERVIEW_STAGES.has(row.currentStage) && row.status !== "Rejected";
+// The green dot / prep nudge are driven purely by a scheduled round's date
+// (row.nextInterviewAt = soonest future round with no transcript). "Soon" = the
+// interview is within the next 2 days and hasn't passed. Once it passes or a
+// transcript is added, rows.ts drops nextInterviewAt and this goes quiet.
+// (Ordering these rows to the top of the list is handled globally in useApplications.)
+const INTERVIEW_SOON_MS = 48 * 60 * 60 * 1000; // 2 days
+function interviewSoon(row: Row, now: number): boolean {
+  return row.nextInterviewAt != null && row.nextInterviewAt >= now && row.nextInterviewAt - now <= INTERVIEW_SOON_MS;
+}
+function formatInterview(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 const CHANNELS = ["LinkedIn", "WhatsApp", "Phone", "Indeed", "Email", "Other"];
@@ -101,12 +104,9 @@ function CheckIcon() {
     </svg>
   );
 }
-function NewDot() {
-  return <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" title="New activity" />;
-}
 function PrepDot() {
   return (
-    <span className="relative flex h-2.5 w-2.5 shrink-0" title="Interview coming up — open to see prep">
+    <span className="relative flex h-2.5 w-2.5 shrink-0" title="Interview within 2 days — open to prep">
       <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60 animate-ping" />
       <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
     </span>
@@ -152,6 +152,8 @@ function PrepNudge({ row }: { row: Row }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
+  if (row.nextInterviewAt == null) return null;
+
   async function open() {
     setLoading(true);
     await seedAndOpen(row, router);
@@ -162,12 +164,12 @@ function PrepNudge({ row }: { row: Row }) {
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-green-100 text-green-700 shrink-0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
           </svg>
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-green-900">You&apos;re in the interview stage</p>
-          <p className="text-xs text-green-700">Open this application to prep for your next round.</p>
+          <p className="text-sm font-semibold text-green-900">Your interview is coming up</p>
+          <p className="text-xs text-green-700">{formatInterview(row.nextInterviewAt)} — open to prep for it.</p>
         </div>
       </div>
       <button
@@ -383,7 +385,7 @@ function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
 
   return (
     <div className="px-4 sm:px-6 py-4 sm:py-5 bg-gray-50">
-      {needsPrep(row) && <PrepNudge row={row} />}
+      {interviewSoon(row, Date.now()) && <PrepNudge row={row} />}
 
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-4">Application timeline</p>
       {row.timeline && row.timeline.length > 0 ? (
@@ -432,6 +434,15 @@ function MetaRow({ r }: { r: Row }) {
 
 export default function ApplicationsTable({ items, allRows, scanning, emptyMessage = "No applications match your filters.", isNewRow, onSeen }: Props) {
   const [expanded, setExpanded] = useState<number | null>(null);
+
+  // Re-render every minute so the green dot starts/stops blinking as an interview
+  // crosses the 2-day line or passes — without a page reload. (Row ordering is
+  // handled in useApplications; this is only the dot.)
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   // restore which row was expanded before navigating to a detail page.
   // wait until items have loaded, and only clear the saved key once we've
@@ -492,7 +503,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                     <td className="py-3 px-3 font-medium text-gray-900">
                       <span className="inline-flex items-center gap-2">
                         <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                        {!isOpen && needsPrep(r) && <PrepDot />}
+                        {!isOpen && interviewSoon(r, now) && <PrepDot />}
                         {r.company}
                         {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
                       </span>
@@ -535,7 +546,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                   <div className="min-w-0">
                     <div className="font-medium text-gray-900 flex items-center gap-1.5 break-words">
                       <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                      {!isOpen && needsPrep(r) && <PrepDot />}
+                      {!isOpen && interviewSoon(r, now) && <PrepDot />}
                       <span className="break-words">{r.company}</span>
                       {r.merged && <span className="text-indigo-400"><LinkIcon /></span>}
                     </div>

@@ -41,6 +41,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
       type: s.type,
       order: s.order,
       result: s.result,
+      scheduledAt: s.scheduledAt ? s.scheduledAt.toISOString() : null,
       transcripts: s.transcripts.map((t) => ({ id: t.id, label: t.label, content: t.content })),
     })),
   };
