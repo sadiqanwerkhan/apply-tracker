@@ -8,27 +8,28 @@ export async function buildRows(userId: string): Promise<Row[]> {
     where: { userId },
     include: {
       emails: true,
-      // Only the fields we need to decide "is there an upcoming, unfilled interview?"
-      stages: { select: { scheduledAt: true, transcripts: { select: { id: true } } } },
+      // Everything needed to describe the next upcoming, unfilled interview.
+      stages: { select: { name: true, type: true, scheduledAt: true, transcripts: { select: { id: true } } } },
     },
   });
 
   // For each application, find the soonest scheduled round that is still in the
-  // future AND has no transcript yet. That timestamp drives the dashboard's
-  // "interview soon" dot: it stops mattering once the round passes or a
-  // transcript is added (both remove it from this calculation).
+  // future AND has no transcript yet, and keep its name + category. That round —
+  // hand-entered on the detail page — is the authoritative "next interview" the
+  // dashboard shows (the email timeline is noisier: an invite and its confirmation
+  // can look like two different stages).
   const now = Date.now();
-  const nextInterviewByApp = new Map<string, number>();
+  const nextInterviewByApp = new Map<string, { at: number; name: string; type: string }>();
   for (const a of apps) {
-    let soonest: number | null = null;
+    let best: { at: number; name: string; type: string } | null = null;
     for (const st of a.stages) {
       if (!st.scheduledAt) continue;          // no date set
       if (st.transcripts.length > 0) continue; // already have the details
       const t = st.scheduledAt.getTime();
       if (t < now) continue;                   // already passed
-      if (soonest === null || t < soonest) soonest = t;
+      if (best === null || t < best.at) best = { at: t, name: st.name, type: st.type };
     }
-    if (soonest !== null) nextInterviewByApp.set(a.id, soonest);
+    if (best) nextInterviewByApp.set(a.id, best);
   }
 
   const rows = aggregateApplications(
@@ -49,6 +50,14 @@ export async function buildRows(userId: string): Promise<Row[]> {
     }))
   );
 
-  // Staple the upcoming-interview timestamp onto each row by its stable id.
-  return rows.map((r) => ({ ...r, nextInterviewAt: nextInterviewByApp.get(r.id) ?? null }));
+  // Staple the upcoming-interview details onto each row by its stable id.
+  return rows.map((r) => {
+    const ni = nextInterviewByApp.get(r.id);
+    return {
+      ...r,
+      nextInterviewAt: ni ? ni.at : null,
+      nextInterviewName: ni ? ni.name : null,
+      nextInterviewType: ni ? ni.type : null,
+    };
+  });
 }

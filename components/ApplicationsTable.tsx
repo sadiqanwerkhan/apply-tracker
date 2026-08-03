@@ -39,10 +39,21 @@ function hasRealInterview(row: Row): boolean {
   return (row.timeline || []).some((t) => !NON_INTERVIEW_STAGES.has(t.stage));
 }
 
-// The green dot / prep nudge are driven purely by a scheduled round's date
+// Category labels for the hand-entered round type (mirrors the detail page's options).
+const STAGE_TYPE_LABELS: Record<string, string> = {
+  phone_screen: "Phone screen",
+  technical: "Technical",
+  system_design: "System design",
+  cultural_fit: "Cultural fit",
+  hr: "HR",
+  final: "Final",
+  other: "Other",
+};
+
+// The green indicator is driven purely by a scheduled round's date
 // (row.nextInterviewAt = soonest future round with no transcript). "Soon" = the
 // interview is within the next 2 days and hasn't passed. Once it passes or a
-// transcript is added, rows.ts drops nextInterviewAt and this goes quiet.
+// transcript is added, rows.ts drops it and this goes quiet.
 // (Ordering these rows to the top of the list is handled globally in useApplications.)
 const INTERVIEW_SOON_MS = 48 * 60 * 60 * 1000; // 2 days
 function interviewSoon(row: Row, now: number): boolean {
@@ -50,6 +61,9 @@ function interviewSoon(row: Row, now: number): boolean {
 }
 function formatInterview(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+function shortWhen(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 }
 
 const CHANNELS = ["LinkedIn", "WhatsApp", "Phone", "Indeed", "Email", "Other"];
@@ -104,11 +118,21 @@ function CheckIcon() {
     </svg>
   );
 }
-function PrepDot() {
+
+// Compact, named indicator for the collapsed row: pulsing green dot + round name + short time.
+function NextInterviewPill({ row }: { row: Row }) {
+  if (row.nextInterviewAt == null) return null;
+  const name = row.nextInterviewName || "Interview";
   return (
-    <span className="relative flex h-2.5 w-2.5 shrink-0" title="Interview within 2 days — open to prep">
-      <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60 animate-ping" />
-      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full bg-green-50 text-green-800 border border-green-200 pl-1.5 pr-2 py-0.5 text-[11px] font-medium max-w-[240px]"
+      title={`${name} · ${formatInterview(row.nextInterviewAt)}`}
+    >
+      <span className="relative flex h-2 w-2 shrink-0">
+        <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-70 animate-ping" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
+      <span className="truncate">{name} · {shortWhen(row.nextInterviewAt)}</span>
     </span>
   );
 }
@@ -148,11 +172,19 @@ function ViewDetailsButton({ row }: { row: Row }) {
   );
 }
 
+// The clean, authoritative "next interview" line — the round the user typed on the
+// detail page (name + category + exact date/time), shown above the noisier email timeline.
 function PrepNudge({ row }: { row: Row }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   if (row.nextInterviewAt == null) return null;
+
+  const name = row.nextInterviewName || "Your interview";
+  const typeLabel =
+    row.nextInterviewType && row.nextInterviewType !== "other"
+      ? STAGE_TYPE_LABELS[row.nextInterviewType] || row.nextInterviewType
+      : null;
 
   async function open() {
     setLoading(true);
@@ -168,7 +200,10 @@ function PrepNudge({ row }: { row: Row }) {
           </svg>
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-green-900">Your interview is coming up</p>
+          <p className="text-sm font-semibold text-green-900 flex items-center gap-2 flex-wrap">
+            <span className="break-words">{name}</span>
+            {typeLabel && <span className="text-[11px] font-medium text-green-700 bg-green-100 rounded-full px-2 py-0.5">{typeLabel}</span>}
+          </p>
           <p className="text-xs text-green-700">{formatInterview(row.nextInterviewAt)} — open to prep for it.</p>
         </div>
       </div>
@@ -177,7 +212,7 @@ function PrepNudge({ row }: { row: Row }) {
         disabled={loading}
         className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg disabled:opacity-60 shrink-0"
       >
-        {loading ? "Opening…" : "Prep for this interview →"}
+        {loading ? "Opening…" : "Prep for this →"}
       </button>
     </div>
   );
@@ -435,9 +470,9 @@ function MetaRow({ r }: { r: Row }) {
 export default function ApplicationsTable({ items, allRows, scanning, emptyMessage = "No applications match your filters.", isNewRow, onSeen }: Props) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  // Re-render every minute so the green dot starts/stops blinking as an interview
+  // Re-render every minute so the green indicator starts/stops as an interview
   // crosses the 2-day line or passes — without a page reload. (Row ordering is
-  // handled in useApplications; this is only the dot.)
+  // handled in useApplications; this is only the indicator.)
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60_000);
@@ -492,6 +527,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
             {items.map((r, i) => {
               const isOpen = expanded === i;
               const isNew = isNewRow?.(r) ?? false;
+              const showPill = !isOpen && interviewSoon(r, now);
               return (
                 <Fragment key={i}>
                   <tr
@@ -501,12 +537,14 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                     }`}
                   >
                     <td className="py-3 px-3 font-medium text-gray-900">
-                      <span className="inline-flex items-center gap-2">
-                        <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                        {!isOpen && interviewSoon(r, now) && <PrepDot />}
-                        {r.company}
-                        {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-2">
+                          <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                          {r.company}
+                          {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
+                        </span>
+                        {showPill && <NextInterviewPill row={r} />}
+                      </div>
                     </td>
                     <td className="py-3 px-3 text-gray-600">{r.role || "—"}</td>
                     <td className="py-3 px-3"><span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(r.status)}`}>{r.status}</span></td>
@@ -531,6 +569,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
         {items.map((r, i) => {
           const isOpen = expanded === i;
           const isNew = isNewRow?.(r) ?? false;
+          const showPill = !isOpen && interviewSoon(r, now);
           return (
             <div
               key={i}
@@ -546,11 +585,11 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                   <div className="min-w-0">
                     <div className="font-medium text-gray-900 flex items-center gap-1.5 break-words">
                       <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                      {!isOpen && interviewSoon(r, now) && <PrepDot />}
                       <span className="break-words">{r.company}</span>
                       {r.merged && <span className="text-indigo-400"><LinkIcon /></span>}
                     </div>
                     {r.role && <div className="text-sm text-gray-600 mt-0.5 break-words pl-5">{r.role}</div>}
+                    {showPill && <div className="pl-5 mt-1.5"><NextInterviewPill row={r} /></div>}
                   </div>
                   <span className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(r.status)}`}>{r.status}</span>
                 </div>
