@@ -16,10 +16,13 @@ export type Row = {
   firstSeen: string;
   lastSeen: string;
   lastActivityAt: number;
-  // Soonest upcoming interview (ms epoch) that still has no transcript.
-  // null/undefined when there's no scheduled, unfilled, future round.
-  // Optional so aggregateApplications doesn't have to set it — rows.ts fills it in.
-  nextInterviewAt?: number | null;
+  // Soonest upcoming interview that still has no transcript — the round the user
+  // scheduled on the detail page. null/undefined when there's no scheduled,
+  // unfilled, future round. Optional so aggregateApplications needn't set them —
+  // rows.ts fills them in.
+  nextInterviewAt?: number | null;   // ms epoch
+  nextInterviewName?: string | null; // the round's name, e.g. "Recruiter call"
+  nextInterviewType?: string | null; // the round's category, e.g. "phone_screen"
   note: string;
   currentStage: string;
   timeline: TimelineEntry[];
