@@ -13,24 +13,24 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const base =
   "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 " +
-  "disabled:opacity-50 disabled:cursor-not-allowed select-none";
+  "outline-none focus-visible:ring-4 focus-visible:ring-ring/30 " +
+  "active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 select-none";
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800",
+    "bg-primary text-primary-foreground shadow-sm hover:brightness-110",
   secondary:
-    "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100",
+    "bg-card text-foreground/80 border border-border hover:bg-secondary hover:text-foreground",
   ghost:
-    "bg-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+    "bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary",
   danger:
-    "bg-white text-red-600 border border-red-200 hover:bg-red-50 active:bg-red-100",
+    "bg-danger-muted text-danger border border-transparent hover:brightness-105",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "text-sm px-3 py-1.5",
-  md: "text-sm px-4 py-2",
-  lg: "text-base px-6 py-2.5",
+  sm: "h-9 text-[13px] px-3",
+  md: "h-10 text-sm px-4",
+  lg: "h-11 text-base px-6",
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(

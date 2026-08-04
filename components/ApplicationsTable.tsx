@@ -2,6 +2,7 @@
 
 import { Fragment, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import { Row, STAGE_LABELS } from "@/lib/types";
 
 type Props = {
@@ -13,22 +14,38 @@ type Props = {
   onSeen?: (id: string) => void;
 };
 
-function statusClasses(status: string) {
-  if (status === "Advancing") return "bg-green-100 text-green-700";
-  if (status === "Rejected") return "bg-red-100 text-red-700";
-  return "bg-amber-100 text-amber-700";
+const STATUS_META: Record<string, { pill: string; dot: string }> = {
+  Advancing: { pill: "bg-success-muted text-success", dot: "bg-success" },
+  Pending: { pill: "bg-warning-muted text-warning", dot: "bg-warning" },
+  Rejected: { pill: "bg-danger-muted text-danger", dot: "bg-danger" },
+};
+function statusMeta(status: string) {
+  return STATUS_META[status] ?? STATUS_META.Pending;
 }
 function stageClasses(stage: string) {
-  if (stage === "rejected") return "bg-red-50 text-red-600";
-  if (stage === "offer") return "bg-emerald-50 text-emerald-700";
-  if (stage === "interview" || stage === "assessment" || stage === "screening") return "bg-blue-50 text-blue-600";
-  return "bg-gray-100 text-gray-500";
+  if (stage === "rejected") return "bg-danger-muted text-danger";
+  if (stage === "offer") return "bg-success-muted text-success";
+  if (stage === "interview" || stage === "assessment" || stage === "screening") return "bg-accent/10 text-accent";
+  return "bg-secondary text-muted-foreground";
 }
 function dotClasses(stage: string) {
-  if (stage === "rejected") return "bg-red-500";
-  if (stage === "offer") return "bg-emerald-500";
-  if (stage === "interview" || stage === "assessment" || stage === "screening") return "bg-blue-500";
-  return "bg-gray-400";
+  if (stage === "rejected") return "bg-danger";
+  if (stage === "offer") return "bg-success";
+  if (stage === "interview" || stage === "assessment" || stage === "screening") return "bg-accent";
+  return "bg-muted-foreground";
+}
+
+function initials(name: string) {
+  return (
+    name
+      .replace(/[^a-zA-Z0-9 ]/g, "")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase() || "?"
+  );
 }
 
 // An application should offer "Interview details & transcripts" only when a real
@@ -119,18 +136,18 @@ function CheckIcon() {
   );
 }
 
-// Compact, named indicator for the collapsed row: pulsing green dot + round name + short time.
+// Compact, named indicator for the collapsed row: pulsing dot + round name + short time.
 function NextInterviewPill({ row }: { row: Row }) {
   if (row.nextInterviewAt == null) return null;
   const name = row.nextInterviewName || "Interview";
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full bg-green-50 text-green-800 border border-green-200 pl-1.5 pr-2 py-0.5 text-[11px] font-medium max-w-[240px]"
+      className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full border border-success/25 bg-success-muted py-0.5 pl-1.5 pr-2 text-[11px] font-medium text-success"
       title={`${name} · ${formatInterview(row.nextInterviewAt)}`}
     >
       <span className="relative flex h-2 w-2 shrink-0">
-        <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-70 animate-ping" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+        <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-70 animate-ping" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
       </span>
       <span className="truncate">{name} · {shortWhen(row.nextInterviewAt)}</span>
     </span>
@@ -138,8 +155,8 @@ function NextInterviewPill({ row }: { row: Row }) {
 }
 
 const btnSecondary =
-  "inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-gray-100 transition";
-const btnGhost = "text-xs text-gray-500 hover:text-gray-800 transition";
+  "inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-[13px] font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground";
+const btnGhost = "text-xs text-muted-foreground hover:text-foreground transition-colors";
 
 function ViewDetailsButton({ row }: { row: Row }) {
   const router = useRouter();
@@ -155,16 +172,16 @@ function ViewDetailsButton({ row }: { row: Row }) {
       <button
         onClick={open}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
       >
         {loading ? "Opening…" : "Interview details & transcripts →"}
       </button>
 
       {loading && (
-        <div className="fixed inset-0 z-50 bg-white/70 backdrop-blur-sm flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
-            <p className="text-sm text-gray-600">Opening interview details…</p>
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+            <p className="text-sm text-muted-foreground">Opening interview details…</p>
           </div>
         </div>
       )}
@@ -192,25 +209,25 @@ function PrepNudge({ row }: { row: Row }) {
   }
 
   return (
-    <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 sm:p-4 flex items-center justify-between gap-3 flex-wrap">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-green-100 text-green-700 shrink-0">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-success/25 bg-success-muted p-3 sm:p-4">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
           </svg>
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-green-900 flex items-center gap-2 flex-wrap">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
             <span className="break-words">{name}</span>
-            {typeLabel && <span className="text-[11px] font-medium text-green-700 bg-green-100 rounded-full px-2 py-0.5">{typeLabel}</span>}
+            {typeLabel && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success">{typeLabel}</span>}
           </p>
-          <p className="text-xs text-green-700">{formatInterview(row.nextInterviewAt)} — open to prep for it.</p>
+          <p className="text-xs text-muted-foreground">{formatInterview(row.nextInterviewAt)} — open to prep for it.</p>
         </div>
       </div>
       <button
         onClick={open}
         disabled={loading}
-        className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg disabled:opacity-60 shrink-0"
+        className="shrink-0 rounded-lg bg-success px-4 py-1.5 text-sm font-medium text-success-foreground transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
       >
         {loading ? "Opening…" : "Prep for this →"}
       </button>
@@ -257,8 +274,8 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
 
   if (row.merged) {
     return (
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 rounded-full px-3 py-1 text-xs font-medium max-w-full break-words">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex max-w-full items-center gap-1.5 break-words rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
           <LinkIcon /> Merged with {row.mergedWith.join(", ")}
         </span>
         <button onClick={unmerge} disabled={saving} className={btnGhost}>Unmerge</button>
@@ -275,25 +292,25 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
       )}
 
       {mode === "picking" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 w-full sm:max-w-xl">
-          <p className="text-sm font-medium text-gray-800 mb-1">Which application is the same as this one?</p>
-          <p className="text-xs text-gray-500 mb-3">Useful when a recruiter and the company both emailed you about the same role.</p>
+        <div className="w-full rounded-xl border border-border bg-card p-3 sm:max-w-xl sm:p-4">
+          <p className="mb-1 text-sm font-medium text-foreground">Which application is the same as this one?</p>
+          <p className="mb-3 text-xs text-muted-foreground">Useful when a recruiter and the company both emailed you about the same role.</p>
           <input
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search company or role…"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            className="mb-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/70 focus:border-accent focus:ring-4 focus:ring-accent/12"
             autoFocus
           />
-          <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-100">
+          <div className="max-h-56 divide-y divide-border overflow-y-auto rounded-lg border border-border">
             {candidates.length === 0 ? (
-              <p className="text-sm text-gray-400 px-3 py-3">No other applications match.</p>
+              <p className="px-3 py-3 text-sm text-muted-foreground">No other applications match.</p>
             ) : (
               candidates.map((c) => (
-                <button key={c.id} onClick={() => { setPicked(c); setMode("naming"); }} className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition">
-                  <span className="block text-sm font-medium text-gray-800 break-words">{c.company}</span>
-                  {c.role && <span className="block text-xs text-gray-500 break-words mt-0.5">{c.role}</span>}
+                <button key={c.id} onClick={() => { setPicked(c); setMode("naming"); }} className="w-full px-3 py-2.5 text-left transition-colors hover:bg-secondary">
+                  <span className="block break-words text-sm font-medium text-foreground">{c.company}</span>
+                  {c.role && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{c.role}</span>}
                 </button>
               ))
             )}
@@ -303,17 +320,17 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
       )}
 
       {mode === "naming" && picked && (
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 w-full sm:max-w-xl">
-          <p className="text-sm font-medium text-gray-800 mb-1">Which name should the merged application show?</p>
-          <p className="text-xs text-gray-500 mb-3">Pick the real company (usually not the recruiter).</p>
+        <div className="w-full rounded-xl border border-border bg-card p-3 sm:max-w-xl sm:p-4">
+          <p className="mb-1 text-sm font-medium text-foreground">Which name should the merged application show?</p>
+          <p className="mb-3 text-xs text-muted-foreground">Pick the real company (usually not the recruiter).</p>
           <div className="grid gap-2 sm:grid-cols-2">
-            <button onClick={() => doMerge(row, picked)} disabled={saving} className="text-left rounded-lg border-2 border-gray-200 hover:border-indigo-400 px-4 py-3 transition disabled:opacity-60">
-              <span className="block text-sm font-semibold text-gray-800 break-words">{row.company}</span>
-              {row.role && <span className="block text-xs text-gray-500 mt-0.5 break-words">{row.role}</span>}
+            <button onClick={() => doMerge(row, picked)} disabled={saving} className="rounded-lg border-2 border-border px-4 py-3 text-left transition hover:border-accent disabled:opacity-60">
+              <span className="block break-words text-sm font-semibold text-foreground">{row.company}</span>
+              {row.role && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{row.role}</span>}
             </button>
-            <button onClick={() => doMerge(picked, row)} disabled={saving} className="text-left rounded-lg border-2 border-gray-200 hover:border-indigo-400 px-4 py-3 transition disabled:opacity-60">
-              <span className="block text-sm font-semibold text-gray-800 break-words">{picked.company}</span>
-              {picked.role && <span className="block text-xs text-gray-500 mt-0.5 break-words">{picked.role}</span>}
+            <button onClick={() => doMerge(picked, row)} disabled={saving} className="rounded-lg border-2 border-border px-4 py-3 text-left transition hover:border-accent disabled:opacity-60">
+              <span className="block break-words text-sm font-semibold text-foreground">{picked.company}</span>
+              {picked.role && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{picked.role}</span>}
             </button>
           </div>
           <button onClick={() => { setMode("picking"); setPicked(null); }} className={`${btnGhost} mt-3`}>Back</button>
@@ -358,15 +375,18 @@ function OutcomeControl({ row }: { row: Row }) {
     } catch { setSaving(false); }
   }
 
+  const fieldClass =
+    "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all focus:border-accent focus:ring-4 focus:ring-accent/12";
+
   return (
     <div>
       {row.manual ? (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 rounded-full px-3 py-1 text-xs font-medium max-w-full break-words">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex max-w-full items-center gap-1.5 break-words rounded-full bg-secondary px-3 py-1 text-xs font-medium text-foreground/70">
             <CheckIcon /> Outcome recorded via {row.manualChannel}
           </span>
           <button onClick={() => setOpen((o) => !o)} disabled={saving} className={btnGhost}>Change</button>
-          <button onClick={remove} disabled={saving} className={`${btnGhost} hover:text-red-600`}>Remove</button>
+          <button onClick={remove} disabled={saving} className={`${btnGhost} hover:text-danger`}>Remove</button>
         </div>
       ) : (
         !open && (
@@ -377,37 +397,37 @@ function OutcomeControl({ row }: { row: Row }) {
       )}
 
       {open && (
-        <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3 sm:p-4 w-full sm:max-w-2xl">
-          <p className="text-sm font-medium text-gray-800 mb-1">Record an outcome from another channel</p>
-          <p className="text-xs text-gray-500 mb-3">For results that came by WhatsApp, LinkedIn, phone, etc. — not email.</p>
+        <div className="mt-3 w-full rounded-xl border border-border bg-card p-3 sm:max-w-2xl sm:p-4">
+          <p className="mb-1 text-sm font-medium text-foreground">Record an outcome from another channel</p>
+          <p className="mb-3 text-xs text-muted-foreground">For results that came by WhatsApp, LinkedIn, phone, etc. — not email.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Outcome</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value as "Rejected" | "Advancing")} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <label className="mb-1 block text-xs text-muted-foreground">Outcome</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as "Rejected" | "Advancing")} className={fieldClass}>
                 <option value="Rejected">Rejected</option>
                 <option value="Advancing">Moved forward</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Channel</label>
-              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <label className="mb-1 block text-xs text-muted-foreground">Channel</label>
+              <select value={channel} onChange={(e) => setChannel(e.target.value)} className={fieldClass}>
                 {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Date (optional)</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              <label className="mb-1 block text-xs text-muted-foreground">Date (optional)</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Reason (optional)</label>
-              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Went with a more senior candidate" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              <label className="mb-1 block text-xs text-muted-foreground">Reason (optional)</label>
+              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Went with a more senior candidate" className={fieldClass} />
             </div>
           </div>
-          <div className="flex gap-2 mt-3">
-            <button onClick={save} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">
+          <div className="mt-3 flex gap-2">
+            <button onClick={save} disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60">
               {saving ? "Saving…" : "Save outcome"}
             </button>
-            <button onClick={() => setOpen(false)} disabled={saving} className="text-sm text-gray-500 px-3 py-2">Cancel</button>
+            <button onClick={() => setOpen(false)} disabled={saving} className="px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground">Cancel</button>
           </div>
         </div>
       )}
@@ -419,29 +439,29 @@ function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
   const showDetails = hasRealInterview(row);
 
   return (
-    <div className="px-4 sm:px-6 py-4 sm:py-5 bg-gray-50">
+    <div className="animate-row-expand bg-secondary/30 px-4 py-4 sm:px-6 sm:py-5">
       {interviewSoon(row, Date.now()) && <PrepNudge row={row} />}
 
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-4">Application timeline</p>
+      <p className="label-mono mb-4 text-[10px] text-muted-foreground">Application timeline</p>
       {row.timeline && row.timeline.length > 0 ? (
-        <ol className="relative border-l-2 border-gray-200 ml-2">
+        <ol className="relative ml-2 border-l-2 border-border">
           {row.timeline.map((e, idx) => (
-            <li key={idx} className="mb-5 last:mb-0 ml-6">
-              <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-white ${dotClasses(e.stage)}`} />
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-semibold text-gray-800">{e.label || STAGE_LABELS[e.stage] || "Update"}</span>
-                <span className="text-xs text-gray-400">{e.date}</span>
+            <li key={idx} className="mb-5 ml-6 last:mb-0">
+              <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-card ${dotClasses(e.stage)}`} />
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-semibold text-foreground">{e.label || STAGE_LABELS[e.stage] || "Update"}</span>
+                <span className="tnum text-xs text-muted-foreground">{e.date}</span>
               </div>
-              {e.subject && <p className="text-sm text-gray-500 mt-1 break-words">{e.subject}</p>}
-              {e.reason && <p className="text-sm text-red-600 mt-1.5 break-words"><span className="font-medium">Why:</span> {e.reason}</p>}
+              {e.subject && <p className="mt-1 break-words text-sm text-muted-foreground">{e.subject}</p>}
+              {e.reason && <p className="mt-1.5 break-words text-sm text-danger"><span className="font-medium">Why:</span> {e.reason}</p>}
             </li>
           ))}
         </ol>
       ) : (
-        <p className="text-sm text-gray-400">No timeline details available.</p>
+        <p className="text-sm text-muted-foreground">No timeline details available.</p>
       )}
 
-      <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-3">
+      <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4">
         {/* Details + transcripts appear only once a real interview exists —
             not for applied-only or applied→rejected. Merge and Record outcome
             are always available (a next-round or rejection email may arrive
@@ -456,12 +476,12 @@ function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
 
 function MetaRow({ r }: { r: Row }) {
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
-      <span>Applied {r.firstSeen}</span>
-      <span>Updated {r.lastSeen}</span>
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span className="tnum">Applied {r.firstSeen}</span>
+      <span className="tnum">Updated {r.lastSeen}</span>
       <span className="inline-flex items-center gap-1">
         Stage:
-        <span className={`px-2 py-0.5 rounded-full ${stageClasses(r.currentStage)}`}>{STAGE_LABELS[r.currentStage] || "Update"}</span>
+        <span className={`rounded-full px-2 py-0.5 ${stageClasses(r.currentStage)}`}>{STAGE_LABELS[r.currentStage] || "Update"}</span>
       </span>
     </div>
   );
@@ -498,29 +518,29 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
     return (
       <div className="mt-2 space-y-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />
+          <div key={i} className="h-14 animate-pulse rounded-xl bg-secondary" />
         ))}
       </div>
     );
   }
 
   if (items.length === 0) {
-    return <p className="text-center text-gray-400 py-8">{emptyMessage}</p>;
+    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
   return (
     <div>
       {/* DESKTOP: table */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-500 border-b border-gray-200">
-              <th className="py-3 px-3 font-medium">Company</th>
-              <th className="py-3 px-3 font-medium">Role</th>
-              <th className="py-3 px-3 font-medium">Status</th>
-              <th className="py-3 px-3 font-medium">Applied</th>
-              <th className="py-3 px-3 font-medium">Last update</th>
-              <th className="py-3 px-3 font-medium">Current stage</th>
+            <tr className="border-b border-border text-left">
+              <th className="label-mono px-3 py-2.5 text-[10px] font-normal text-muted-foreground">Company</th>
+              <th className="label-mono px-3 py-2.5 text-[10px] font-normal text-muted-foreground">Role</th>
+              <th className="label-mono px-3 py-2.5 text-[10px] font-normal text-muted-foreground">Status</th>
+              <th className="label-mono px-3 py-2.5 text-[10px] font-normal text-muted-foreground">Applied</th>
+              <th className="label-mono px-3 py-2.5 text-[10px] font-normal text-muted-foreground">Last update</th>
+              <th className="label-mono px-3 py-2.5 text-[10px] font-normal text-muted-foreground">Current stage</th>
             </tr>
           </thead>
           <tbody>
@@ -528,33 +548,45 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
               const isOpen = expanded === i;
               const isNew = isNewRow?.(r) ?? false;
               const showPill = !isOpen && interviewSoon(r, now);
+              const meta = statusMeta(r.status);
               return (
                 <Fragment key={i}>
                   <tr
                     onClick={() => { onSeen?.(r.id); setExpanded(isOpen ? null : i); }}
-                    className={`border-b border-gray-100 cursor-pointer transition-colors ${
-                      isNew ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-gray-50"
+                    className={`cursor-pointer border-b border-border/70 transition-colors ${
+                      isNew ? "bg-accent/[0.06] hover:bg-accent/10" : "hover:bg-secondary/60"
                     }`}
                   >
-                    <td className="py-3 px-3 font-medium text-gray-900">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="inline-flex items-center gap-2">
-                          <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                          {r.company}
-                          {r.merged && <span className="text-indigo-400" title="Merged application"><LinkIcon /></span>}
+                    <td className="px-3 py-3 font-medium text-foreground">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex min-w-0 items-center gap-2.5">
+                          <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isOpen ? "rotate-90 text-foreground" : ""}`} />
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-[11px] font-semibold text-foreground/70">
+                            {initials(r.company)}
+                          </span>
+                          <span className="truncate">{r.company}</span>
+                          {r.merged && <span className="text-accent" title="Merged application"><LinkIcon /></span>}
+                          {isNew && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label="New activity" />}
                         </span>
                         {showPill && <NextInterviewPill row={r} />}
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-gray-600">{r.role || "—"}</td>
-                    <td className="py-3 px-3"><span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(r.status)}`}>{r.status}</span></td>
-                    <td className="py-3 px-3 text-gray-500">{r.firstSeen}</td>
-                    <td className="py-3 px-3 text-gray-500">{r.lastSeen}</td>
-                    <td className="py-3 px-3"><span className={`px-2.5 py-1 rounded-full text-xs font-medium ${stageClasses(r.currentStage)}`}>{STAGE_LABELS[r.currentStage] || "Update"}</span></td>
+                    <td className="px-3 py-3 text-foreground/75">{r.role || "—"}</td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${meta.pill}`}>
+                        <span className={`size-1.5 rounded-full ${meta.dot}`} />
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="tnum px-3 py-3 text-muted-foreground">{r.firstSeen}</td>
+                    <td className="tnum px-3 py-3 text-muted-foreground">{r.lastSeen}</td>
+                    <td className="px-3 py-3">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${stageClasses(r.currentStage)}`}>{STAGE_LABELS[r.currentStage] || "Update"}</span>
+                    </td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={6} className="p-0 border-b border-gray-100"><Timeline row={r} allRows={allRows} /></td>
+                      <td colSpan={6} className="border-b border-border p-0"><Timeline row={r} allRows={allRows} /></td>
                     </tr>
                   )}
                 </Fragment>
@@ -565,35 +597,43 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
       </div>
 
       {/* MOBILE: cards */}
-      <div className="md:hidden space-y-3">
+      <div className="space-y-3 md:hidden">
         {items.map((r, i) => {
           const isOpen = expanded === i;
           const isNew = isNewRow?.(r) ?? false;
           const showPill = !isOpen && interviewSoon(r, now);
+          const meta = statusMeta(r.status);
           return (
             <div
               key={i}
-              className={`border rounded-xl overflow-hidden transition-colors ${
-                isNew ? "border-blue-200 bg-blue-50" : "border-gray-200"
+              className={`overflow-hidden rounded-xl border transition-colors ${
+                isNew ? "border-accent/30 bg-accent/[0.06]" : "border-border"
               }`}
             >
               <div
                 onClick={() => { onSeen?.(r.id); setExpanded(isOpen ? null : i); }}
-                className="p-4 cursor-pointer"
+                className="cursor-pointer p-4"
               >
-                <div className="flex justify-between items-start gap-2">
+                <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-medium text-gray-900 flex items-center gap-1.5 break-words">
-                      <span className={`text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                    <div className="flex items-center gap-2 break-words font-medium text-foreground">
+                      <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isOpen ? "rotate-90 text-foreground" : ""}`} />
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-[10px] font-semibold text-foreground/70">
+                        {initials(r.company)}
+                      </span>
                       <span className="break-words">{r.company}</span>
-                      {r.merged && <span className="text-indigo-400"><LinkIcon /></span>}
+                      {r.merged && <span className="text-accent"><LinkIcon /></span>}
+                      {isNew && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label="New activity" />}
                     </div>
-                    {r.role && <div className="text-sm text-gray-600 mt-0.5 break-words pl-5">{r.role}</div>}
-                    {showPill && <div className="pl-5 mt-1.5"><NextInterviewPill row={r} /></div>}
+                    {r.role && <div className="mt-0.5 break-words pl-[3.75rem] text-sm text-muted-foreground">{r.role}</div>}
+                    {showPill && <div className="mt-1.5 pl-[3.75rem]"><NextInterviewPill row={r} /></div>}
                   </div>
-                  <span className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(r.status)}`}>{r.status}</span>
+                  <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${meta.pill}`}>
+                    <span className={`size-1.5 rounded-full ${meta.dot}`} />
+                    {r.status}
+                  </span>
                 </div>
-                <div className="pl-5"><MetaRow r={r} /></div>
+                <div className="pl-[3.75rem]"><MetaRow r={r} /></div>
               </div>
               {isOpen && <Timeline row={r} allRows={allRows} />}
             </div>

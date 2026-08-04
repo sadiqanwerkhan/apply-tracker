@@ -40,18 +40,18 @@ export default function ExportMenu({ label, count, primary, onExport }: Props) {
   }
 
   const btnClass = primary
-    ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-    : "bg-white hover:border-gray-400 text-gray-700 border border-gray-300";
+    ? "bg-primary text-primary-foreground shadow-sm hover:brightness-110"
+    : "bg-card text-foreground/80 border border-border hover:bg-secondary hover:text-foreground";
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
         disabled={busy || count === 0}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${btnClass}`}
+        className={`inline-flex h-10 items-center gap-2 rounded-lg px-3.5 text-[13px] font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${btnClass}`}
       >
         {busy ? "Exporting…" : label}
-        <span className="opacity-70">({count})</span>
+        <span className="tnum opacity-70">({count})</span>
         <svg
           width="12" height="12" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2.5"
@@ -62,12 +62,12 @@ export default function ExportMenu({ label, count, primary, onExport }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20">
+        <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
           {OPTIONS.map((o) => (
             <button
               key={o.key}
               onClick={() => pick(o.key)}
-              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+              className="w-full px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-secondary"
             >
               {o.label}
             </button>

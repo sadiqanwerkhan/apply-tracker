@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Zap, RefreshCw, LogOut, MoreVertical, Bell } from "lucide-react";
 import { useApplications } from "@/hooks/useApplications";
 import ScanControls from "@/components/ScanControls";
 import FilterPills from "@/components/FilterPills";
@@ -10,6 +11,7 @@ import Pagination from "@/components/Pagination";
 import ExportControls from "@/components/ExportControls";
 import ScanningQuote from "@/components/ScanningQuote";
 import StatsSummary from "@/components/StatsSummary";
+import ThemeToggle from "./ThemeToggle";
 import Button from "@/components/ui/Button";
 
 type Props = {
@@ -90,13 +92,13 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
       : "No applications match your filters.";
 
   return (
-    <main className="min-h-screen bg-gray-50 py-6 px-3 sm:py-10 sm:px-4">
-      <div className="max-w-6xl mx-auto">
+    <main className="min-h-screen bg-background px-3 py-6 sm:px-4 sm:py-10">
+      <div className="mx-auto max-w-6xl">
         {app.needsReconnect && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-warning/30 bg-warning-muted p-4">
             <div className="min-w-0">
-              <p className="font-semibold text-amber-900">Your Gmail connection expired</p>
-              <p className="text-sm text-amber-700 mt-0.5">
+              <p className="font-semibold text-warning-foreground">Your Gmail connection expired</p>
+              <p className="mt-0.5 text-sm text-warning-foreground/80">
                 Reconnect to keep scanning. This just refreshes your Google sign-in — your data stays intact.
               </p>
             </div>
@@ -104,7 +106,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             <form action={onReconnect}>
               <button
                 type="submit"
-                className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg shrink-0"
+                className="shrink-0 rounded-lg bg-warning px-4 py-2 text-sm font-medium text-warning-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98]"
               >
                 Reconnect Gmail
               </button>
@@ -112,64 +114,72 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           </div>
         )}
 
-        <div className="flex items-start justify-between gap-3 mb-6 sm:mb-8">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Apply Tracker
-            </h1>
-            <p className="text-gray-500 mt-1 text-sm break-words">
-              Signed in as {userEmail}
-            </p>
+        <header className="animate-fade-up mb-6 flex items-start justify-between gap-3 sm:mb-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <Zap className="size-5" fill="currentColor" strokeWidth={0} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                Apply Tracker
+              </h1>
+              <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                Signed in as <span className="text-foreground/80">{userEmail}</span>
+              </p>
+            </div>
           </div>
 
           {/* DESKTOP: buttons inline */}
-          <div className="hidden sm:flex items-center gap-3 shrink-0">
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">
             <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
+              {!reclassifying && <RefreshCw className="size-3.5" />}
               {reclassifying ? reclassMsg : "Re-check classifications"}
             </Button>
             <form action={onSignOut}>
-              <Button type="submit" variant="secondary" size="sm">Sign out</Button>
+              <Button type="submit" variant="secondary" size="sm">
+                <LogOut className="size-3.5" />
+                Sign out
+              </Button>
             </form>
+            <ThemeToggle />
           </div>
 
-          {/* MOBILE: overflow menu */}
-          <div className="sm:hidden relative shrink-0" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-label="Account menu"
-              aria-expanded={menuOpen}
-              className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-            >
-              {/* three-dot icon */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <circle cx="12" cy="5" r="1.6" />
-                <circle cx="12" cy="12" r="1.6" />
-                <circle cx="12" cy="19" r="1.6" />
-              </svg>
-            </button>
+          {/* MOBILE: theme toggle + overflow menu */}
+          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+            <ThemeToggle />
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-label="Account menu"
+                aria-expanded={menuOpen}
+                className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <MoreVertical className="size-4" />
+              </button>
 
-            {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 bg-white shadow-lg z-20 overflow-hidden">
-                <button
-                  onClick={reclassifyAll}
-                  disabled={reclassifying}
-                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  {reclassifying ? reclassMsg : "Re-check classifications"}
-                </button>
-                <div className="border-t border-gray-100" />
-                <form action={onSignOut}>
+              {menuOpen && (
+                <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
                   <button
-                    type="submit"
-                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={reclassifyAll}
+                    disabled={reclassifying}
+                    className="w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
                   >
-                    Sign out
+                    {reclassifying ? reclassMsg : "Re-check classifications"}
                   </button>
-                </form>
-              </div>
-            )}
+                  <div className="border-t border-border" />
+                  <form action={onSignOut}>
+                    <button
+                      type="submit"
+                      className="w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                    >
+                      Sign out
+                    </button>
+                  </form>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </header>
 
         <ScanControls
           startDate={app.startDate}
@@ -196,8 +206,8 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           />
         )}
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-          <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-6">
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
             <FilterPills
               active={app.statusFilter}
               counts={app.counts}
@@ -216,15 +226,16 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           </div>
 
           {!busy && app.newCount > 0 && (
-            <div className="flex items-center justify-between gap-3 mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-              <span className="inline-flex items-center gap-2 text-sm text-blue-800">
-                <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-                {app.newCount} {app.newCount === 1 ? "application has" : "applications have"} new activity
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-accent/15 bg-accent/[0.06] px-3 py-2.5">
+              <span className="flex items-center gap-2 text-[13px] text-foreground/80">
+                <Bell className="size-3.5 text-accent" />
+                <span className="tnum font-medium text-foreground">{app.newCount}</span>
+                {app.newCount === 1 ? "application has" : "applications have"} new activity
               </span>
 
               <button
                 onClick={app.markAllSeen}
-                className="text-sm font-medium text-blue-700 hover:text-blue-900 shrink-0"
+                className="shrink-0 text-[13px] font-medium text-accent transition-opacity hover:opacity-70"
               >
                 Mark all as read
               </button>

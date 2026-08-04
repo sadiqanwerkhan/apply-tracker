@@ -54,12 +54,12 @@ export default function ScanningQuote() {
 
   return (
     <div className="flex flex-col items-center justify-center text-center py-8 px-4 mb-2">
-      <div className="flex items-center gap-2 mb-4 text-indigo-500">
-        <span className="inline-block h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+      <div className="flex items-center gap-2 mb-4 text-accent">
+        <span className="inline-block h-2 w-2 rounded-full bg-accent animate-pulse" />
         <span className="text-xs font-semibold uppercase tracking-wide">Scanning your inbox…</span>
       </div>
       <p
-        className={`text-lg md:text-xl font-medium text-gray-700 max-w-xl leading-relaxed transition-opacity duration-300 ${
+        className={`text-lg md:text-xl font-medium text-foreground max-w-xl leading-relaxed transition-opacity duration-300 ${
           visible ? "opacity-100" : "opacity-0"
         }`}
       >
