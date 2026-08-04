@@ -154,8 +154,6 @@ function NextInterviewPill({ row }: { row: Row }) {
   );
 }
 
-const btnSecondary =
-  "inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-[13px] font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground";
 const btnGhost = "text-xs text-muted-foreground hover:text-foreground transition-colors";
 
 function ViewDetailsButton({ row }: { row: Row }) {
@@ -172,7 +170,7 @@ function ViewDetailsButton({ row }: { row: Row }) {
       <button
         onClick={open}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3.5 py-2.5 text-[13px] font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
       >
         {loading ? "Opening…" : "Interview details & transcripts →"}
       </button>
@@ -235,28 +233,27 @@ function PrepNudge({ row }: { row: Row }) {
   );
 }
 
-function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
-  const [mode, setMode] = useState<"idle" | "picking" | "naming">("idle");
-  const [picked, setPicked] = useState<Row | null>(null);
-  const [q, setQ] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const candidates = allRows.filter(
-    (r) => r.id !== row.id && (`${r.company} ${r.role}`).toLowerCase().includes(q.toLowerCase())
+function MetaItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <span className="label-mono text-[10px] text-muted-foreground">{label}</span>
+      <span className="tnum text-xs font-medium text-foreground">{value}</span>
+    </div>
   );
+}
 
-  async function doMerge(primary: Row, other: Row) {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/merge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ primaryId: primary.id, otherId: other.id }),
-      });
-      if (res.ok) window.location.reload();
-      else { setSaving(false); alert("Could not merge. Please try again."); }
-    } catch { setSaving(false); alert("Could not merge. Please try again."); }
-  }
+const triggerBtn =
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors";
+function triggerClass(active: boolean) {
+  return `${triggerBtn} ${
+    active
+      ? "border-accent bg-accent/10 text-accent"
+      : "border-border bg-card text-foreground/80 hover:bg-secondary hover:text-foreground"
+  }`;
+}
+
+function MergeButton({ row, active, onToggle }: { row: Row; active: boolean; onToggle: () => void }) {
+  const [saving, setSaving] = useState(false);
 
   async function unmerge() {
     if (!window.confirm("Split this merged application back into separate applications?")) return;
@@ -284,15 +281,39 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
   }
 
   return (
-    <div>
-      {mode === "idle" && (
-        <button onClick={() => setMode("picking")} className={btnSecondary}>
-          <LinkIcon /> Merge with another
-        </button>
-      )}
+    <button type="button" onClick={onToggle} className={triggerClass(active)}>
+      <LinkIcon /> Merge
+    </button>
+  );
+}
 
-      {mode === "picking" && (
-        <div className="w-full rounded-xl border border-border bg-card p-3 sm:max-w-xl sm:p-4">
+function MergePanel({ row, allRows, onClose }: { row: Row; allRows: Row[]; onClose: () => void }) {
+  const [mode, setMode] = useState<"picking" | "naming">("picking");
+  const [picked, setPicked] = useState<Row | null>(null);
+  const [q, setQ] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const candidates = allRows.filter(
+    (r) => r.id !== row.id && (`${r.company} ${r.role}`).toLowerCase().includes(q.toLowerCase())
+  );
+
+  async function doMerge(primary: Row, other: Row) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryId: primary.id, otherId: other.id }),
+      });
+      if (res.ok) window.location.reload();
+      else { setSaving(false); alert("Could not merge. Please try again."); }
+    } catch { setSaving(false); alert("Could not merge. Please try again."); }
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-card p-3 sm:p-4">
+      {mode === "picking" ? (
+        <>
           <p className="mb-1 text-sm font-medium text-foreground">Which application is the same as this one?</p>
           <p className="mb-3 text-xs text-muted-foreground">Useful when a recruiter and the company both emailed you about the same role.</p>
           <input
@@ -315,51 +336,33 @@ function MergeControl({ row, allRows }: { row: Row; allRows: Row[] }) {
               ))
             )}
           </div>
-          <button onClick={() => { setMode("idle"); setQ(""); }} className={`${btnGhost} mt-3`}>Cancel</button>
-        </div>
-      )}
-
-      {mode === "naming" && picked && (
-        <div className="w-full rounded-xl border border-border bg-card p-3 sm:max-w-xl sm:p-4">
-          <p className="mb-1 text-sm font-medium text-foreground">Which name should the merged application show?</p>
-          <p className="mb-3 text-xs text-muted-foreground">Pick the real company (usually not the recruiter).</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button onClick={() => doMerge(row, picked)} disabled={saving} className="rounded-lg border-2 border-border px-4 py-3 text-left transition hover:border-accent disabled:opacity-60">
-              <span className="block break-words text-sm font-semibold text-foreground">{row.company}</span>
-              {row.role && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{row.role}</span>}
-            </button>
-            <button onClick={() => doMerge(picked, row)} disabled={saving} className="rounded-lg border-2 border-border px-4 py-3 text-left transition hover:border-accent disabled:opacity-60">
-              <span className="block break-words text-sm font-semibold text-foreground">{picked.company}</span>
-              {picked.role && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{picked.role}</span>}
-            </button>
-          </div>
-          <button onClick={() => { setMode("picking"); setPicked(null); }} className={`${btnGhost} mt-3`}>Back</button>
-        </div>
+          <button onClick={onClose} className={`${btnGhost} mt-3`}>Cancel</button>
+        </>
+      ) : (
+        picked && (
+          <>
+            <p className="mb-1 text-sm font-medium text-foreground">Which name should the merged application show?</p>
+            <p className="mb-3 text-xs text-muted-foreground">Pick the real company (usually not the recruiter).</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button onClick={() => doMerge(row, picked)} disabled={saving} className="rounded-lg border-2 border-border px-4 py-3 text-left transition hover:border-accent disabled:opacity-60">
+                <span className="block break-words text-sm font-semibold text-foreground">{row.company}</span>
+                {row.role && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{row.role}</span>}
+              </button>
+              <button onClick={() => doMerge(picked, row)} disabled={saving} className="rounded-lg border-2 border-border px-4 py-3 text-left transition hover:border-accent disabled:opacity-60">
+                <span className="block break-words text-sm font-semibold text-foreground">{picked.company}</span>
+                {picked.role && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{picked.role}</span>}
+              </button>
+            </div>
+            <button onClick={() => { setMode("picking"); setPicked(null); }} className={`${btnGhost} mt-3`}>Back</button>
+          </>
+        )
       )}
     </div>
   );
 }
 
-function OutcomeControl({ row }: { row: Row }) {
-  const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<"Rejected" | "Advancing">("Rejected");
-  const [channel, setChannel] = useState("LinkedIn");
-  const [reason, setReason] = useState("");
-  const [date, setDate] = useState("");
+function OutcomeButton({ row, active, onToggle }: { row: Row; active: boolean; onToggle: () => void }) {
   const [saving, setSaving] = useState(false);
-
-  async function save() {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/manual-outcome", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicationId: row.id, status, channel, reason: reason || undefined, date: date || undefined }),
-      });
-      if (res.ok) window.location.reload();
-      else { setSaving(false); alert("Could not save the outcome. Please try again."); }
-    } catch { setSaving(false); alert("Could not save the outcome. Please try again."); }
-  }
 
   async function remove() {
     if (!window.confirm("Remove the manually recorded outcome for this application?")) return;
@@ -375,101 +378,144 @@ function OutcomeControl({ row }: { row: Row }) {
     } catch { setSaving(false); }
   }
 
+  if (row.manual) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex max-w-full items-center gap-1.5 break-words rounded-full bg-secondary px-3 py-1 text-xs font-medium text-foreground/70">
+          <CheckIcon /> Outcome recorded via {row.manualChannel}
+        </span>
+        <button onClick={onToggle} disabled={saving} className={btnGhost}>Change</button>
+        <button onClick={remove} disabled={saving} className={`${btnGhost} hover:text-danger`}>Remove</button>
+      </div>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onToggle} className={triggerClass(active)}>
+      <EditIcon /> Record outcome
+    </button>
+  );
+}
+
+function OutcomePanel({ row, onClose }: { row: Row; onClose: () => void }) {
+  const [status, setStatus] = useState<"Rejected" | "Advancing">("Rejected");
+  const [channel, setChannel] = useState("LinkedIn");
+  const [reason, setReason] = useState("");
+  const [date, setDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const fieldClass =
     "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all focus:border-accent focus:ring-4 focus:ring-accent/12";
 
-  return (
-    <div>
-      {row.manual ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex max-w-full items-center gap-1.5 break-words rounded-full bg-secondary px-3 py-1 text-xs font-medium text-foreground/70">
-            <CheckIcon /> Outcome recorded via {row.manualChannel}
-          </span>
-          <button onClick={() => setOpen((o) => !o)} disabled={saving} className={btnGhost}>Change</button>
-          <button onClick={remove} disabled={saving} className={`${btnGhost} hover:text-danger`}>Remove</button>
-        </div>
-      ) : (
-        !open && (
-          <button onClick={() => setOpen(true)} className={btnSecondary}>
-            <EditIcon /> Record outcome
-          </button>
-        )
-      )}
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/manual-outcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: row.id, status, channel, reason: reason || undefined, date: date || undefined }),
+      });
+      if (res.ok) window.location.reload();
+      else { setSaving(false); alert("Could not save the outcome. Please try again."); }
+    } catch { setSaving(false); alert("Could not save the outcome. Please try again."); }
+  }
 
-      {open && (
-        <div className="mt-3 w-full rounded-xl border border-border bg-card p-3 sm:max-w-2xl sm:p-4">
-          <p className="mb-1 text-sm font-medium text-foreground">Record an outcome from another channel</p>
-          <p className="mb-3 text-xs text-muted-foreground">For results that came by WhatsApp, LinkedIn, phone, etc. — not email.</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Outcome</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value as "Rejected" | "Advancing")} className={fieldClass}>
-                <option value="Rejected">Rejected</option>
-                <option value="Advancing">Moved forward</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Channel</label>
-              <select value={channel} onChange={(e) => setChannel(e.target.value)} className={fieldClass}>
-                {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Date (optional)</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Reason (optional)</label>
-              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Went with a more senior candidate" className={fieldClass} />
-            </div>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button onClick={save} disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60">
-              {saving ? "Saving…" : "Save outcome"}
-            </button>
-            <button onClick={() => setOpen(false)} disabled={saving} className="px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground">Cancel</button>
-          </div>
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-card p-3 sm:p-4">
+      <p className="mb-1 text-sm font-medium text-foreground">Record an outcome from another channel</p>
+      <p className="mb-3 text-xs text-muted-foreground">For results that came by WhatsApp, LinkedIn, phone, etc. — not email.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Outcome</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value as "Rejected" | "Advancing")} className={fieldClass}>
+            <option value="Rejected">Rejected</option>
+            <option value="Advancing">Moved forward</option>
+          </select>
         </div>
-      )}
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Channel</label>
+          <select value={channel} onChange={(e) => setChannel(e.target.value)} className={fieldClass}>
+            {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Date (optional)</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Reason (optional)</label>
+          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Went with a more senior candidate" className={fieldClass} />
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={save} disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60">
+          {saving ? "Saving…" : "Save outcome"}
+        </button>
+        <button onClick={onClose} disabled={saving} className="px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground">Cancel</button>
+      </div>
     </div>
   );
 }
 
 function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
   const showDetails = hasRealInterview(row);
+  const [openPanel, setOpenPanel] = useState<null | "merge" | "outcome">(null);
+  const sideBySide = !row.merged && !row.manual;
 
   return (
     <div className="animate-row-expand bg-secondary/30 px-4 py-4 sm:px-6 sm:py-5">
       {interviewSoon(row, Date.now()) && <PrepNudge row={row} />}
 
-      <p className="label-mono mb-4 text-[10px] text-muted-foreground">Application timeline</p>
-      {row.timeline && row.timeline.length > 0 ? (
-        <ol className="relative ml-2 border-l-2 border-border">
-          {row.timeline.map((e, idx) => (
-            <li key={idx} className="mb-5 ml-6 last:mb-0">
-              <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-card ${dotClasses(e.stage)}`} />
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-semibold text-foreground">{e.label || STAGE_LABELS[e.stage] || "Update"}</span>
-                <span className="tnum text-xs text-muted-foreground">{e.date}</span>
-              </div>
-              {e.subject && <p className="mt-1 break-words text-sm text-muted-foreground">{e.subject}</p>}
-              {e.reason && <p className="mt-1.5 break-words text-sm text-danger"><span className="font-medium">Why:</span> {e.reason}</p>}
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="text-sm text-muted-foreground">No timeline details available.</p>
-      )}
+      <div className="grid gap-6 sm:grid-cols-[minmax(0,280px)_1fr] sm:gap-8">
+        {/* Left: meta card + actions */}
+        <div className="flex flex-col gap-4">
+          <div className="rounded-xl border border-border bg-card px-4 py-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+            <MetaItem label="Applied" value={row.firstSeen} />
+            <div className="border-t border-border/70" />
+            <MetaItem label="Last update" value={row.lastSeen} />
+            <div className="border-t border-border/70" />
+            <MetaItem label="Current stage" value={STAGE_LABELS[row.currentStage] || "Update"} />
+          </div>
 
-      <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4">
-        {/* Details + transcripts appear only once a real interview exists —
-            not for applied-only or applied→rejected. Merge and Record outcome
-            are always available (a next-round or rejection email may arrive
-            from a different address and need merging or recording). */}
-        {showDetails && <ViewDetailsButton row={row} />}
-        <MergeControl row={row} allRows={allRows} />
-        <OutcomeControl row={row} />
+          {/* Details + transcripts appear only once a real interview exists —
+              not for applied-only or applied→rejected. Merge and Record outcome
+              are always available (a next-round or rejection email may arrive
+              from a different address and need merging or recording). */}
+          <div className="flex flex-col gap-2">
+            {showDetails && <ViewDetailsButton row={row} />}
+            <div className={sideBySide ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2"}>
+              <MergeButton row={row} active={openPanel === "merge"} onToggle={() => setOpenPanel((p) => (p === "merge" ? null : "merge"))} />
+              <OutcomeButton row={row} active={openPanel === "outcome"} onToggle={() => setOpenPanel((p) => (p === "outcome" ? null : "outcome"))} />
+            </div>
+          </div>
+        </div>
+
+        {/* Right: timeline */}
+        <div>
+          <p className="label-mono mb-4 text-[10px] text-muted-foreground">Application timeline</p>
+          {row.timeline && row.timeline.length > 0 ? (
+            <ol className="relative ml-2 border-l-2 border-border">
+              {row.timeline.map((e, idx) => (
+                <li key={idx} className="mb-5 ml-6 last:mb-0">
+                  <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-card ${dotClasses(e.stage)}`} />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-semibold text-foreground">{e.label || STAGE_LABELS[e.stage] || "Update"}</span>
+                    <span className="tnum text-xs text-muted-foreground">{e.date}</span>
+                  </div>
+                  {e.subject && <p className="mt-1 break-words text-sm text-muted-foreground">{e.subject}</p>}
+                  {e.reason && <p className="mt-1.5 break-words text-sm text-danger"><span className="font-medium">Why:</span> {e.reason}</p>}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-sm text-muted-foreground">No timeline details available.</p>
+          )}
+        </div>
       </div>
+
+      {/* Panels open full-width below the two columns so the picker/form have room */}
+      {openPanel === "merge" && <MergePanel row={row} allRows={allRows} onClose={() => setOpenPanel(null)} />}
+      {openPanel === "outcome" && <OutcomePanel row={row} onClose={() => setOpenPanel(null)} />}
     </div>
   );
 }
