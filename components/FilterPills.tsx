@@ -11,7 +11,7 @@ const OPTIONS: StatusFilter[] = ["All", "Advancing", "Pending", "Rejected"];
 
 export default function FilterPills({ active, counts, scanning, onChange }: Props) {
   return (
-    <div className="flex w-fit items-center gap-1 rounded-xl bg-secondary/70 p-1">
+    <div className="flex w-full items-center gap-1 overflow-x-auto rounded-xl bg-secondary/70 p-1 sm:w-fit [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {OPTIONS.map((s) => {
         const isActive = active === s;
         return (
@@ -19,7 +19,7 @@ export default function FilterPills({ active, counts, scanning, onChange }: Prop
             key={s}
             onClick={() => onChange(s)}
             disabled={scanning}
-            className={`relative rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
+            className={`relative shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
               isActive
                 ? "bg-card text-foreground shadow-sm ring-1 ring-border"
                 : "text-muted-foreground hover:text-foreground"

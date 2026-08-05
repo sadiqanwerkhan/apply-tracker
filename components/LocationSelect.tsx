@@ -45,7 +45,7 @@ export default function LocationSelect({ value, onChange, placeholder }: Locatio
   }
 
   return (
-    <div style={{ position: "relative" }}>
+    <div className="relative">
       <input
         type="text"
         value={open ? query : value}
@@ -80,12 +80,12 @@ export default function LocationSelect({ value, onChange, placeholder }: Locatio
             setOpen(false);
           }
         }}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/70 focus:border-accent focus:ring-4 focus:ring-accent/12"
       />
 
       {open && options.length > 0 && (
         <ul
-          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
+          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-popover shadow-lg"
           onMouseDown={(e) => e.preventDefault()} // keep the input focused through the click
         >
           {options.map((opt, i) => (
@@ -94,7 +94,7 @@ export default function LocationSelect({ value, onChange, placeholder }: Locatio
               onMouseEnter={() => setActive(i)}
               onClick={() => pick(opt)}
               className={`cursor-pointer px-3 py-2 text-sm ${
-                i === active ? "bg-indigo-50 text-indigo-700" : "text-gray-700"
+                i === active ? "bg-accent/10 text-accent" : "text-foreground"
               } ${opt === "Remote" ? "font-medium" : ""}`}
             >
               {opt === "Remote" ? "🌐 Remote" : opt}
