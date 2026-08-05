@@ -107,25 +107,25 @@ export default function DateTimePicker({ value, onChange, placeholder }: Props) 
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-secondary focus:outline-none focus:ring-4 focus:ring-accent/12"
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 shrink-0">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted-foreground">
           <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
         </svg>
-        <span className={selected ? "" : "text-gray-400"}>{label}</span>
+        <span className={selected ? "" : "text-muted-foreground"}>{label}</span>
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-2 w-72 rounded-xl border border-gray-200 bg-white shadow-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={() => setView(new Date(year, month - 1, 1))} className="h-7 w-7 rounded-md hover:bg-gray-100 text-gray-500 text-lg leading-none">‹</button>
-            <span className="text-sm font-medium text-gray-800">{MONTHS[month]} {year}</span>
-            <button type="button" onClick={() => setView(new Date(year, month + 1, 1))} className="h-7 w-7 rounded-md hover:bg-gray-100 text-gray-500 text-lg leading-none">›</button>
+        <div className="absolute z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-popover p-3 shadow-lg">
+          <div className="mb-2 flex items-center justify-between">
+            <button type="button" onClick={() => setView(new Date(year, month - 1, 1))} className="h-7 w-7 rounded-md text-lg leading-none text-muted-foreground hover:bg-secondary">‹</button>
+            <span className="text-sm font-medium text-foreground">{MONTHS[month]} {year}</span>
+            <button type="button" onClick={() => setView(new Date(year, month + 1, 1))} className="h-7 w-7 rounded-md text-lg leading-none text-muted-foreground hover:bg-secondary">›</button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 mb-1">
+          <div className="mb-1 grid grid-cols-7 gap-1">
             {WEEKDAYS.map((w) => (
-              <div key={w} className="text-[11px] text-center text-gray-400 font-medium">{w}</div>
+              <div key={w} className="text-center text-[11px] font-medium text-muted-foreground">{w}</div>
             ))}
           </div>
 
@@ -138,7 +138,7 @@ export default function DateTimePicker({ value, onChange, placeholder }: Props) 
                   type="button"
                   key={i}
                   onClick={() => pickDay(d)}
-                  className={`h-8 rounded-md text-sm ${isSel ? "bg-indigo-600 text-white font-medium" : "text-gray-700 hover:bg-indigo-50"}`}
+                  className={`h-8 rounded-md text-sm ${isSel ? "bg-accent font-medium text-accent-foreground" : "text-foreground hover:bg-accent/10"}`}
                 >
                   {d}
                 </button>
@@ -146,28 +146,28 @@ export default function DateTimePicker({ value, onChange, placeholder }: Props) 
             })}
           </div>
 
-          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-500">Time</span>
-            <select value={hour12} onChange={(e) => setHour12(Number(e.target.value))} className="border border-gray-300 rounded-md px-2 py-1 text-sm bg-white">
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            <span className="text-xs text-muted-foreground">Time</span>
+            <select value={hour12} onChange={(e) => setHour12(Number(e.target.value))} className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground">
               {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
                 <option key={h} value={h}>{h}</option>
               ))}
             </select>
-            <span className="text-gray-400">:</span>
-            <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="border border-gray-300 rounded-md px-2 py-1 text-sm bg-white">
+            <span className="text-muted-foreground">:</span>
+            <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground">
               {minuteOptions.map((mi) => (
                 <option key={mi} value={mi}>{String(mi).padStart(2, "0")}</option>
               ))}
             </select>
-            <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-              <button type="button" onClick={() => setAmPm("AM")} className={`px-2.5 py-1 text-xs ${ampm === "AM" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}>AM</button>
-              <button type="button" onClick={() => setAmPm("PM")} className={`px-2.5 py-1 text-xs ${ampm === "PM" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}>PM</button>
+            <div className="inline-flex overflow-hidden rounded-md border border-input">
+              <button type="button" onClick={() => setAmPm("AM")} className={`px-2.5 py-1 text-xs ${ampm === "AM" ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary"}`}>AM</button>
+              <button type="button" onClick={() => setAmPm("PM")} className={`px-2.5 py-1 text-xs ${ampm === "PM" ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary"}`}>PM</button>
             </div>
           </div>
 
           <div className="mt-3 flex items-center justify-between">
-            <button type="button" onClick={() => { onChange(""); setOpen(false); }} className="text-xs text-gray-500 hover:text-red-600">Clear</button>
-            <button type="button" onClick={() => setOpen(false)} className="text-xs font-medium text-indigo-600">Done</button>
+            <button type="button" onClick={() => { onChange(""); setOpen(false); }} className="text-xs text-muted-foreground hover:text-danger">Clear</button>
+            <button type="button" onClick={() => setOpen(false)} className="text-xs font-medium text-accent">Done</button>
           </div>
         </div>
       )}

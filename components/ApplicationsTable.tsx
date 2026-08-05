@@ -577,8 +577,8 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
   return (
     <div>
       {/* DESKTOP: table */}
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full text-sm">
+      <div className="hidden overflow-x-auto lg:block">
+      <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-border text-left">
               <th className="label-mono px-3 py-2.5 text-[10px] font-normal text-muted-foreground">Company</th>
@@ -643,7 +643,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
       </div>
 
       {/* MOBILE: cards */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {items.map((r, i) => {
           const isOpen = expanded === i;
           const isNew = isNewRow?.(r) ?? false;

@@ -92,7 +92,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
       : "No applications match your filters.";
 
   return (
-    <main className="min-h-screen bg-background px-3 py-6 sm:px-4 sm:py-10">
+    <main className="min-h-screen overflow-x-hidden bg-background px-3 py-6 sm:px-4 sm:py-10">
       <div className="mx-auto max-w-6xl">
         {app.needsReconnect && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-warning/30 bg-warning-muted p-4">
@@ -130,8 +130,8 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           </div>
 
           {/* DESKTOP: buttons inline */}
-          <div className="hidden shrink-0 items-center gap-2 sm:flex">
-            <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
+          <div className="hidden shrink-0 items-center gap-2 md:flex">
+          <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
               {!reclassifying && <RefreshCw className="size-3.5" />}
               {reclassifying ? reclassMsg : "Re-check classifications"}
             </Button>
@@ -145,7 +145,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           </div>
 
           {/* MOBILE: theme toggle + overflow menu */}
-          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+          <div className="flex shrink-0 items-center gap-2 md:hidden">
             <ThemeToggle />
             <div className="relative" ref={menuRef}>
               <button

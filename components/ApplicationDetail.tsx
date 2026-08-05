@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, memo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import LocationSelect from "@/components/LocationSelect";
 import DateTimePicker from "@/components/DateTimePicker";
+
 const STAGE_TYPES: { value: string; label: string }[] = [
   { value: "phone_screen", label: "Phone / Recruiter Screen" },
   { value: "technical", label: "Technical" },
@@ -25,11 +26,44 @@ function toLocalInput(d: string | Date | null | undefined): string {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }
 
+const fieldBase =
+  "rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/70 focus:border-accent focus:ring-4 focus:ring-accent/12";
+const btnPrimary =
+  "rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60";
+
 function Chevron({ open }: { open: boolean }) {
   return (
-    <span className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-180" : ""}`}>
+    <span className={`text-muted-foreground transition-transform shrink-0 ${open ? "rotate-180" : ""}`}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
     </span>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
+    </svg>
+  );
+}
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    </svg>
+  );
+}
+function ChevronUpDown({ dir }: { dir: "up" | "down" }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      {dir === "up" ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
+    </svg>
+  );
+}
+function RefreshIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
   );
 }
 
@@ -147,13 +181,13 @@ export default function ApplicationDetail({ application }: { application: AppT }
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-6 px-3 sm:py-10 sm:px-4">
-      <div className="max-w-3xl mx-auto">
-        <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline">← Back to applications</button>
+    <main className="min-h-screen overflow-x-hidden bg-background px-3 py-6 sm:px-4 sm:py-10">
+      <div className="mx-auto max-w-3xl">
+        <button onClick={() => router.back()} className="text-sm text-accent hover:underline">← Back to applications</button>
 
-        <div className="mt-4 mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{application.company}</h1>
-          {application.role && <p className="text-gray-500 mt-1 break-words">{application.role}</p>}
+        <div className="mb-8 mt-4">
+          <h1 className="break-words text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{application.company}</h1>
+          {application.role && <p className="mt-1 break-words text-muted-foreground">{application.role}</p>}
         </div>
 
         <JobDescriptionCard
@@ -163,7 +197,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
           jobDescription={application.jobDescription}
         />
 
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">Interview stages</h2>
+        <h2 className="label-mono mb-3 text-[10px] text-muted-foreground">Interview stages</h2>
 
         <div className="space-y-4">
           {application.stages.map((stage, i) => (
@@ -177,54 +211,55 @@ export default function ApplicationDetail({ application }: { application: AppT }
               applicationId={application.id}
             />
           ))}
-          {application.stages.length === 0 && <p className="text-sm text-gray-400">No stages yet — add one below.</p>}
+          {application.stages.length === 0 && <p className="text-sm text-muted-foreground">No stages yet — add one below.</p>}
         </div>
 
         {/* add stage */}
         {addingStage ? (
-          <div className="mt-4 flex flex-col sm:flex-row gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <input
               value={newStage}
               onChange={(e) => setNewStage(e.target.value)}
               placeholder="Stage name (e.g. Technical Interview)"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className={`${fieldBase} flex-1`}
               autoFocus
             />
             <select
               value={newStageType}
               onChange={(e) => setNewStageType(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className={fieldBase}
             >
               {STAGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             <div className="flex gap-2">
-              <button onClick={addStage} disabled={busy} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">Add</button>
-              <button onClick={() => { setAddingStage(false); setNewStage(""); setNewStageType("technical"); }} className="text-sm text-gray-500 px-2">Cancel</button>
+              <button onClick={addStage} disabled={busy} className={btnPrimary}>Add</button>
+              <button onClick={() => { setAddingStage(false); setNewStage(""); setNewStageType("technical"); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
             </div>
           </div>
         ) : (
-          <button onClick={() => setAddingStage(true)} className="mt-4 inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
+          <button onClick={() => setAddingStage(true)} className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
             + Add stage
           </button>
         )}
 
         {/* AI analysis */}
-        <div className="mt-8 bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-800">Interview analysis</h2>
-              <p className="text-xs text-gray-500 mt-0.5">AI reviews all your transcripts for this application and highlights patterns.</p>
+        <div className="mt-8 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">Interview analysis</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">AI reviews all your transcripts for this application and highlights patterns.</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 onClick={runAnalysis}
                 disabled={analyzing || totalTranscripts === 0}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
               >
-                {analyzing ? "Analyzing…" : analysis ? "Re-analyze" : "Analyze my interviews"}
+                <RefreshIcon />
+                {analyzing ? "Analyzing…" : analysis ? "Re-analyze" : "Analyze"}
               </button>
               {analysis && (
-                <button onClick={() => setAnalysisOpen((o) => !o)} className="p-2 rounded-lg hover:bg-gray-100" aria-label={analysisOpen ? "Collapse" : "Expand"}>
+                <button onClick={() => setAnalysisOpen((o) => !o)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary" aria-label={analysisOpen ? "Collapse" : "Expand"}>
                   <Chevron open={analysisOpen} />
                 </button>
               )}
@@ -232,42 +267,43 @@ export default function ApplicationDetail({ application }: { application: AppT }
           </div>
 
           {totalTranscripts === 0 && (
-            <p className="text-xs text-gray-400 mt-3">Add at least one transcript above to enable analysis.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Add at least one transcript above to enable analysis.</p>
           )}
 
           {analysis && analysisOpen && (
-            <div className="mt-4 border-t border-gray-100 pt-4">
+            <div className="mt-4 border-t border-border pt-4">
               <AnalysisView raw={analysis} />
-              <p className="text-[11px] text-gray-400 mt-4">
+              <p className="mt-4 text-[11px] text-muted-foreground">
                 Based on your recorded conversations, including the interviewers&apos; responses. It reflects how the discussions went, not any private post-interview decision.
               </p>
             </div>
           )}
 
           {analysis && !analysisOpen && (
-            <button onClick={() => setAnalysisOpen(true)} className="mt-3 text-sm text-indigo-600 hover:underline">
+            <button onClick={() => setAnalysisOpen(true)} className="mt-3 text-sm text-accent hover:underline">
               Show analysis
             </button>
           )}
         </div>
 
         {/* Interview insights */}
-        <div className="mt-6 bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-800">Interview insights</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Key facts pulled from your transcripts — stack, team, product, comp, and next steps.</p>
+        <div className="mt-6 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">Interview insights</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">Key facts pulled from your transcripts — stack, team, product, comp, and next steps.</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 onClick={runInsights}
                 disabled={extracting || totalTranscripts === 0}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
               >
+                <RefreshIcon />
                 {extracting ? "Extracting…" : insights ? "Refresh insights" : "Extract insights"}
               </button>
               {insights && (
-                <button onClick={() => setInsightsOpen((o) => !o)} className="p-2 rounded-lg hover:bg-gray-100" aria-label={insightsOpen ? "Collapse" : "Expand"}>
+                <button onClick={() => setInsightsOpen((o) => !o)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary" aria-label={insightsOpen ? "Collapse" : "Expand"}>
                   <Chevron open={insightsOpen} />
                 </button>
               )}
@@ -275,13 +311,13 @@ export default function ApplicationDetail({ application }: { application: AppT }
           </div>
 
           {totalTranscripts === 0 && (
-            <p className="text-xs text-gray-400 mt-3">Add at least one transcript above to enable insights.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Add at least one transcript above to enable insights.</p>
           )}
 
           {insights && insightsOpen && <InsightsView insights={insights} />}
 
           {insights && !insightsOpen && (
-            <button onClick={() => setInsightsOpen(true)} className="mt-3 text-sm text-indigo-600 hover:underline">
+            <button onClick={() => setInsightsOpen(true)} className="mt-3 text-sm text-accent hover:underline">
               Show insights
             </button>
           )}
@@ -346,38 +382,39 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <div className="flex items-start justify-between gap-2">
         {editing ? (
-          <div className="flex-1 flex flex-col gap-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Round name (e.g. Technical round)" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" autoFocus />
-            <div className="flex items-center gap-2 flex-wrap">
-            <DateTimePicker value={scheduledLocal} onChange={setScheduledLocal} />
-              <select value={type} onChange={(e) => setType(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
+          <div className="flex flex-1 flex-col gap-2">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Round name (e.g. Technical round)" className={`${fieldBase} w-full !py-1.5`} autoFocus />
+            <div className="flex flex-wrap items-center gap-2">
+              <DateTimePicker value={scheduledLocal} onChange={setScheduledLocal} />
+              <select value={type} onChange={(e) => setType(e.target.value)} className={`${fieldBase} !px-2 !py-1.5`}>
                 {STAGE_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-              <button onClick={saveEdit} disabled={busy} className="text-sm text-indigo-600 font-medium">Save</button>
-              <button onClick={cancelEdit} className="text-sm text-gray-500">Cancel</button>
+              <button onClick={saveEdit} disabled={busy} className="text-sm font-medium text-accent">Save</button>
+              <button onClick={cancelEdit} className="text-sm text-muted-foreground hover:text-foreground">Cancel</button>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <span className="font-semibold text-gray-800 break-words">{stage.name}</span>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="break-words font-semibold text-foreground">{stage.name}</span>
               {stage.type && stage.type !== "other" && (
-                <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{stageTypeLabel(stage.type)}</span>
+                <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{stageTypeLabel(stage.type)}</span>
               )}
               {stage.scheduledAt && (
-                <span className="text-[11px] font-medium text-green-700 bg-green-50 rounded-full px-2 py-0.5 shrink-0">
+                <span className="shrink-0 rounded-full bg-success-muted px-2 py-0.5 text-[11px] font-medium text-success">
                   {new Date(stage.scheduledAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "up" })} disabled={busy || isFirst} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move up">▲</button>
-              <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "down" })} disabled={busy || isLast} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move down">▼</button>
-              <button onClick={() => { setName(stage.name); setType(stage.type || "other"); setScheduledLocal(toLocalInput(stage.scheduledAt)); setEditing(true); }} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-gray-800">Edit</button>
-              <button onClick={del} disabled={busy} className="px-1 text-xs text-gray-500 hover:text-red-600">Delete</button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "up" })} disabled={busy || isFirst} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent" title="Move up"><ChevronUpDown dir="up" /></button>
+              <button onClick={() => onCall("/api/stage", "PATCH", { id: stage.id, move: "down" })} disabled={busy || isLast} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent" title="Move down"><ChevronUpDown dir="down" /></button>
+              <span className="mx-1 h-5 w-px bg-border" />
+              <button onClick={() => { setName(stage.name); setType(stage.type || "other"); setScheduledLocal(toLocalInput(stage.scheduledAt)); setEditing(true); }} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"><PencilIcon /> Rename</button>
+              <button onClick={del} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-danger-muted hover:text-danger"><TrashIcon /> Delete</button>
             </div>
           </>
         )}
@@ -387,23 +424,23 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
       {isUpcoming && (
         <div className="mt-3">
           {!prep ? (
-            <div className="rounded-lg border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-3 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600 shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-gradient-to-br from-accent/10 to-transparent p-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
                 </span>
-                <p className="text-sm text-indigo-900 font-medium">Get ready for this round</p>
+                <p className="text-sm font-medium text-foreground">Get ready for this round</p>
               </div>
-              <button onClick={runPrep} disabled={prepping} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg disabled:opacity-60 shrink-0">
+              <button onClick={runPrep} disabled={prepping} className="shrink-0 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60">
                 {prepping ? "Preparing…" : "Prep me"}
               </button>
             </div>
           ) : prepOpen ? (
             <PrepView prep={prep} onRegenerate={runPrep} regenerating={prepping} onCollapse={() => setPrepOpen(false)} />
           ) : (
-            <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 flex items-center justify-between gap-3">
-              <span className="text-sm text-indigo-900 font-medium">Interview prep ready</span>
-              <button onClick={() => setPrepOpen(true)} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium shrink-0">Show prep</button>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent/[0.06] p-3">
+              <span className="text-sm font-medium text-foreground">Interview prep ready</span>
+              <button onClick={() => setPrepOpen(true)} className="shrink-0 text-sm font-medium text-accent hover:opacity-70">Show prep</button>
             </div>
           )}
         </div>
@@ -416,16 +453,16 @@ const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy, onCall
       </div>
 
       {addingT ? (
-        <div className="mt-3 border-t border-gray-100 pt-3">
-          <input value={tLabel} onChange={(e) => setTLabel(e.target.value)} placeholder="Label (optional, e.g. interviewer name)" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2" />
-          <textarea value={tContent} onChange={(e) => setTContent(e.target.value)} placeholder="Paste the interview transcript here…" rows={6} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" autoFocus />
-          <div className="flex gap-2 mt-2">
-            <button onClick={addTranscript} disabled={busy} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">Save transcript</button>
-            <button onClick={() => { setAddingT(false); setTContent(""); setTLabel(""); }} className="text-sm text-gray-500 px-2">Cancel</button>
+        <div className="mt-3 border-t border-border pt-3">
+          <input value={tLabel} onChange={(e) => setTLabel(e.target.value)} placeholder="Label (optional, e.g. interviewer name)" className={`${fieldBase} mb-2 w-full`} />
+          <textarea value={tContent} onChange={(e) => setTContent(e.target.value)} placeholder="Paste the interview transcript here…" rows={6} className={`${fieldBase} w-full`} autoFocus />
+          <div className="mt-2 flex gap-2">
+            <button onClick={addTranscript} disabled={busy} className={btnPrimary}>Save transcript</button>
+            <button onClick={() => { setAddingT(false); setTContent(""); setTLabel(""); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setAddingT(true)} disabled={busy} className="mt-3 text-sm text-indigo-600 hover:underline">+ Add transcript</button>
+        <button onClick={() => setAddingT(true)} disabled={busy} className="mt-3 text-sm text-accent hover:underline">+ Add transcript</button>
       )}
     </div>
   );
@@ -448,12 +485,12 @@ const TranscriptItem = memo(function TranscriptItem({ transcript, busy, onCall }
 
   if (editing) {
     return (
-      <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2" />
-        <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-        <div className="flex gap-2 mt-2">
-          <button onClick={save} disabled={busy} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">Save</button>
-          <button onClick={() => { setEditing(false); setContent(transcript.content); setLabel(transcript.label || ""); }} className="text-sm text-gray-500 px-2">Cancel</button>
+      <div className="rounded-xl border border-border bg-secondary p-3">
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" className={`${fieldBase} mb-2 w-full`} />
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8} className={`${fieldBase} w-full`} />
+        <div className="mt-2 flex gap-2">
+          <button onClick={save} disabled={busy} className={btnPrimary}>Save</button>
+          <button onClick={() => { setEditing(false); setContent(transcript.content); setLabel(transcript.label || ""); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
         </div>
       </div>
     );
@@ -462,20 +499,27 @@ const TranscriptItem = memo(function TranscriptItem({ transcript, busy, onCall }
   const preview = transcript.content.length > 140 ? transcript.content.slice(0, 140) + "…" : transcript.content;
 
   return (
-    <div className="border border-gray-200 rounded-lg p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-gray-700 break-words">{transcript.label || "Transcript"}</span>
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => setExpanded((e) => !e)} className="text-xs text-indigo-600 hover:underline">{expanded ? "Collapse" : "View"}</button>
-          <button onClick={() => setEditing(true)} disabled={busy} className="text-xs text-gray-500 hover:text-gray-800">Edit</button>
-          <button onClick={del} disabled={busy} className="text-xs text-gray-500 hover:text-red-600">Delete</button>
+    <div className="rounded-xl border border-border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 gap-3">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>
+          </span>
+          <div className="min-w-0">
+            <span className="block break-words text-sm font-medium text-foreground">{transcript.label || "Transcript"}</span>
+            {expanded ? (
+              <pre className="mt-2 max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm text-muted-foreground">{transcript.content}</pre>
+            ) : (
+              <p className="mt-1 break-words text-sm text-muted-foreground">{preview}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={() => setExpanded((e) => !e)} className="text-xs font-medium text-accent hover:underline">{expanded ? "Collapse" : "View"}</button>
+          <button onClick={() => setEditing(true)} disabled={busy} className="text-xs text-muted-foreground hover:text-foreground">Edit</button>
+          <button onClick={del} disabled={busy} className="text-xs text-muted-foreground hover:text-danger">Delete</button>
         </div>
       </div>
-      {expanded ? (
-        <pre className="text-sm text-gray-600 mt-2 whitespace-pre-wrap break-words font-sans max-h-96 overflow-y-auto">{transcript.content}</pre>
-      ) : (
-        <p className="text-sm text-gray-400 mt-1 break-words">{preview}</p>
-      )}
     </div>
   );
 });
@@ -491,7 +535,7 @@ function InsightsView({ insights }: { insights: Insights }) {
         value: (
           <div className="flex flex-wrap gap-1.5">
             {insights.techStack.map((t, i) => (
-              <span key={i} className="bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-0.5 text-xs font-medium">{t}</span>
+              <span key={i} className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">{t}</span>
             ))}
           </div>
         ),
@@ -507,23 +551,23 @@ function InsightsView({ insights }: { insights: Insights }) {
   const hasNotes = !!(insights.notes && insights.notes.length > 0);
 
   if (rows.length === 0 && !hasNotes) {
-    return <p className="text-xs text-gray-400 mt-3">No specific details were found in the transcripts yet.</p>;
+    return <p className="mt-3 text-xs text-muted-foreground">No specific details were found in the transcripts yet.</p>;
   }
 
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+    <div className="mt-4 space-y-3 border-t border-border pt-4">
       {rows.map((r, i) => (
-        <div key={i} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 sm:w-32 shrink-0 pt-0.5">{r.label}</span>
-          <div className="text-sm text-gray-700 break-words flex-1">{r.value}</div>
+        <div key={i} className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
+          <span className="label-mono shrink-0 pt-0.5 text-[10px] text-muted-foreground sm:w-32">{r.label}</span>
+          <div className="flex-1 break-words text-sm text-foreground">{r.value}</div>
         </div>
       ))}
       {hasNotes && (
-        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 sm:w-32 shrink-0 pt-0.5">Notes</span>
-          <ul className="text-sm text-gray-700 space-y-1 flex-1">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
+          <span className="label-mono shrink-0 pt-0.5 text-[10px] text-muted-foreground sm:w-32">Notes</span>
+          <ul className="flex-1 space-y-1 text-sm text-foreground">
             {insights.notes!.map((n, i) => (
-              <li key={i} className="flex gap-2"><span className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-gray-400" /><span className="break-words">{n}</span></li>
+              <li key={i} className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" /><span className="break-words">{n}</span></li>
             ))}
           </ul>
         </div>
@@ -549,11 +593,11 @@ function parseAnalysis(raw: string): ParsedAnalysis | null {
 }
 
 const SECTION_META: Record<string, { label: string; badge: string; dot: string; ring: string }> = {
-  strengths: { label: "What you did well", badge: "bg-green-100 text-green-600", dot: "bg-green-500", ring: "border-green-200" },
-  struggles: { label: "Where you struggled", badge: "bg-amber-100 text-amber-600", dot: "bg-amber-500", ring: "border-amber-200" },
-  unsure: { label: "Questions you were unsure of", badge: "bg-red-100 text-red-600", dot: "bg-red-500", ring: "border-red-200" },
-  patterns: { label: "Recurring patterns", badge: "bg-purple-100 text-purple-600", dot: "bg-purple-500", ring: "border-purple-200" },
-  actions: { label: "Do differently next time", badge: "bg-indigo-100 text-indigo-600", dot: "bg-indigo-500", ring: "border-indigo-300" },
+  strengths: { label: "What you did well", badge: "bg-success-muted text-success", dot: "bg-success", ring: "border-success/25" },
+  struggles: { label: "Where you struggled", badge: "bg-warning-muted text-warning", dot: "bg-warning", ring: "border-warning/25" },
+  unsure: { label: "Questions you were unsure of", badge: "bg-danger-muted text-danger", dot: "bg-danger", ring: "border-danger/25" },
+  patterns: { label: "Recurring patterns", badge: "bg-secondary text-muted-foreground", dot: "bg-muted-foreground", ring: "border-border" },
+  actions: { label: "Do differently next time", badge: "bg-accent/10 text-accent", dot: "bg-accent", ring: "border-accent/30" },
 };
 
 const SECTION_ORDER = ["strengths", "struggles", "unsure", "patterns", "actions"];
@@ -571,52 +615,52 @@ function SectionIcon({ type }: { type: string }) {
 function ReadinessBand({ readiness }: { readiness: Readiness }) {
   const meta =
     ({
-      strong: { label: "Strong", wrap: "bg-green-50 border-green-200", text: "text-green-700", seg: "bg-green-500", filled: 3 },
-      mixed: { label: "Mixed", wrap: "bg-amber-50 border-amber-200", text: "text-amber-700", seg: "bg-amber-500", filled: 2 },
-      needs_work: { label: "Needs work", wrap: "bg-red-50 border-red-200", text: "text-red-700", seg: "bg-red-500", filled: 1 },
+      strong: { label: "Strong", wrap: "bg-success-muted border-success/25", text: "text-success", seg: "bg-success", filled: 3 },
+      mixed: { label: "Mixed", wrap: "bg-warning-muted border-warning/25", text: "text-warning", seg: "bg-warning", filled: 2 },
+      needs_work: { label: "Needs work", wrap: "bg-danger-muted border-danger/25", text: "text-danger", seg: "bg-danger", filled: 1 },
     } as Record<string, { label: string; wrap: string; text: string; seg: string; filled: number }>)[readiness.band] ||
-    { label: readiness.band, wrap: "bg-gray-50 border-gray-200", text: "text-gray-700", seg: "bg-gray-400", filled: 0 };
+    { label: readiness.band, wrap: "bg-secondary border-border", text: "text-foreground", seg: "bg-muted-foreground", filled: 0 };
 
   return (
-    <div className={`rounded-xl border ${meta.wrap} p-4 mb-4`}>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className={`mb-4 rounded-2xl border ${meta.wrap} p-4`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Interview readiness</p>
+          <p className="label-mono text-[11px] text-muted-foreground">Interview readiness</p>
           <p className={`text-lg font-bold ${meta.text}`}>{meta.label}</p>
         </div>
         <div className="flex gap-1.5" aria-hidden>
           {[0, 1, 2].map((i) => (
-            <span key={i} className={`h-2 w-8 rounded-full ${i < meta.filled ? meta.seg : "bg-gray-200"}`} />
+            <span key={i} className={`h-2 w-8 rounded-full ${i < meta.filled ? meta.seg : "bg-secondary"}`} />
           ))}
         </div>
       </div>
-      {readiness.reason && <p className="text-sm text-gray-600 mt-2 break-words">{readiness.reason}</p>}
+      {readiness.reason && <p className="mt-2 break-words text-sm text-muted-foreground">{readiness.reason}</p>}
     </div>
   );
 }
 
 function CollapsibleSection({ section, defaultOpen }: { section: AnalysisSection; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
-  const meta = SECTION_META[section.type] || { label: section.type, badge: "bg-gray-100 text-gray-600", dot: "bg-gray-400", ring: "border-gray-200" };
+  const meta = SECTION_META[section.type] || { label: section.type, badge: "bg-secondary text-muted-foreground", dot: "bg-muted-foreground", ring: "border-border" };
   const emphasize = section.type === "actions";
 
   return (
-    <div className={`rounded-xl border ${meta.ring} ${emphasize ? "bg-indigo-50/40" : "bg-white"} overflow-hidden`}>
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 p-4 text-left hover:bg-black/[0.02] transition">
-        <span className={`inline-flex items-center justify-center h-6 w-6 rounded-lg shrink-0 ${meta.badge}`}>
+    <div className={`overflow-hidden rounded-xl border ${meta.ring} ${emphasize ? "bg-accent/[0.05]" : "bg-card"}`}>
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 p-4 text-left transition hover:bg-foreground/[0.02]">
+        <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${meta.badge}`}>
           <SectionIcon type={section.type} />
         </span>
-        <h3 className="text-sm font-semibold text-gray-800 flex-1 break-words">{meta.label}</h3>
-        <span className="text-xs text-gray-500 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{section.points.length}</span>
-        <span className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-180" : ""}`}>
+        <h3 className="flex-1 break-words text-sm font-semibold text-foreground">{meta.label}</h3>
+        <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">{section.points.length}</span>
+        <span className={`text-muted-foreground transition-transform shrink-0 ${open ? "rotate-180" : ""}`}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
         </span>
       </button>
       {open && (
-        <ul className="px-4 pb-4 space-y-1.5">
+        <ul className="space-y-1.5 px-4 pb-4">
           {section.points.map((p, j) => (
-            <li key={j} className="flex gap-2.5 text-sm text-gray-700 leading-relaxed">
-              <span className={`shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+            <li key={j} className="flex gap-2.5 text-sm leading-relaxed text-foreground/80">
+              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
               <span className="break-words">{p}</span>
             </li>
           ))}
@@ -662,12 +706,12 @@ function JobDescriptionCard({
   // collapsed state
   if (!open) {
     return (
-      <div className="mb-6 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-accent/25 bg-accent/[0.06] p-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-indigo-900">
+          <p className="text-sm font-medium text-foreground">
             {hasJD ? "Job description added" : "Add the job description for sharper results"}
           </p>
-          <p className="text-xs text-indigo-700/70 mt-0.5">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {hasJD
               ? "Your analysis and interview prep use it."
               : "Optional — paste the JD and your analysis and prep become tailored to this role."}
@@ -675,7 +719,7 @@ function JobDescriptionCard({
         </div>
         <button
           onClick={() => setOpen(true)}
-          className="bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 text-sm font-medium px-4 py-2 rounded-lg shrink-0"
+          className="shrink-0 rounded-lg border border-accent/25 bg-card px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/10"
         >
           {hasJD ? "Edit job description" : "Add job description"}
         </button>
@@ -685,10 +729,10 @@ function JobDescriptionCard({
 
   // expanded editor
   return (
-    <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-gray-800 mb-3">Job description</h2>
+    <div className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-5">
+      <h2 className="mb-3 text-sm font-semibold text-foreground">Job description</h2>
       <div className="grid gap-3 sm:grid-cols-2">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job title (optional)" className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job title (optional)" className={fieldBase} />
         <LocationSelect value={location} onChange={setLocation} />
       </div>
       <textarea
@@ -696,55 +740,55 @@ function JobDescriptionCard({
         onChange={(e) => setDesc(e.target.value)}
         placeholder="Paste the full job description here…"
         rows={8}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-3"
+        className={`${fieldBase} mt-3 w-full`}
       />
-      <div className="flex gap-2 mt-3">
-        <button onClick={save} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">
+      <div className="mt-3 flex gap-2">
+        <button onClick={save} disabled={saving} className={btnPrimary}>
           {saving ? "Saving…" : "Save"}
         </button>
-        <button onClick={() => setOpen(false)} disabled={saving} className="text-sm text-gray-500 px-3">Cancel</button>
+        <button onClick={() => setOpen(false)} disabled={saving} className="px-3 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
       </div>
     </div>
   );
 }
 
 function PrepView({ prep, onRegenerate, regenerating, onCollapse }: { prep: Prep; onRegenerate: () => void; regenerating: boolean; onCollapse: () => void }) {
-  const blocks: { label: string; items: string[]; badge: string; dot: string }[] = [];
-  if (prep.focusAreas?.length) blocks.push({ label: "What to cover", items: prep.focusAreas, badge: "bg-indigo-100 text-indigo-600", dot: "bg-indigo-500" });
-  if (prep.questionsToAsk?.length) blocks.push({ label: "Smart questions to ask", items: prep.questionsToAsk, badge: "bg-emerald-100 text-emerald-600", dot: "bg-emerald-500" });
-  if (prep.watchOuts?.length) blocks.push({ label: "Watch out for", items: prep.watchOuts, badge: "bg-amber-100 text-amber-600", dot: "bg-amber-500" });
+  const blocks: { label: string; items: string[]; dot: string }[] = [];
+  if (prep.focusAreas?.length) blocks.push({ label: "What to cover", items: prep.focusAreas, dot: "bg-accent" });
+  if (prep.questionsToAsk?.length) blocks.push({ label: "Smart questions to ask", items: prep.questionsToAsk, dot: "bg-success" });
+  if (prep.watchOuts?.length) blocks.push({ label: "Watch out for", items: prep.watchOuts, dot: "bg-warning" });
 
   return (
-    <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-white p-4">
-      <div className="flex items-center justify-between gap-3 mb-3">
+    <div className="rounded-xl border border-accent/20 bg-gradient-to-br from-accent/[0.08] to-transparent p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600 shrink-0">
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>
           </span>
-          <h4 className="text-sm font-semibold text-indigo-900">Interview prep</h4>
+          <h4 className="text-sm font-semibold text-foreground">Interview prep</h4>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={onRegenerate} disabled={regenerating} className="text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50">
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={onRegenerate} disabled={regenerating} className="text-xs text-accent hover:opacity-70 disabled:opacity-50">
             {regenerating ? "Refreshing…" : "Regenerate"}
           </button>
-          <button onClick={onCollapse} className="p-1.5 rounded-lg hover:bg-indigo-100/60" aria-label="Collapse">
+          <button onClick={onCollapse} className="rounded-lg p-1.5 hover:bg-accent/10" aria-label="Collapse">
             <Chevron open={true} />
           </button>
         </div>
       </div>
 
       {prep.encouragement && (
-        <p className="text-sm text-gray-700 mb-3 break-words">{prep.encouragement}</p>
+        <p className="mb-3 break-words text-sm text-foreground/80">{prep.encouragement}</p>
       )}
 
       <div className="space-y-3">
         {blocks.map((b, i) => (
           <div key={i}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{b.label}</p>
+            <p className="label-mono mb-1.5 text-[11px] text-muted-foreground">{b.label}</p>
             <ul className="space-y-1">
               {b.items.map((it, j) => (
-                <li key={j} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
-                  <span className={`shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full ${b.dot}`} />
+                <li key={j} className="flex gap-2 text-sm leading-relaxed text-foreground/80">
+                  <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${b.dot}`} />
                   <span className="break-words">{it}</span>
                 </li>
               ))}
@@ -761,7 +805,7 @@ function AnalysisView({ raw }: { raw: string }) {
 
   // fallback for old plain-text analyses (still fully readable)
   if (!parsed) {
-    return <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words font-sans leading-relaxed">{raw}</pre>;
+    return <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-foreground/90">{raw}</pre>;
   }
 
   const sections = parsed.sections
@@ -771,7 +815,7 @@ function AnalysisView({ raw }: { raw: string }) {
   return (
     <div>
       {parsed.readiness && parsed.readiness.band && <ReadinessBand readiness={parsed.readiness} />}
-      {parsed.headline && <p className="text-base text-gray-800 font-medium mb-4 break-words">{parsed.headline}</p>}
+      {parsed.headline && <p className="mb-4 break-words text-base font-medium text-foreground">{parsed.headline}</p>}
       <div className="space-y-2.5">
         {sections.map((s) => (
           <CollapsibleSection key={s.type} section={s} defaultOpen={s.type === "actions"} />
