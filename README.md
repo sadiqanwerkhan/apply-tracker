@@ -131,5 +131,6 @@ A few decisions worth highlighting:
 
 ## Update
 - More features in pipeline.
-- Currently, the app is under construction that's why the scan is not working properly. We are fixing it.
-- We apologize for the inconvenience.
+- Security for tokens saving and encryption are under development.
+- Cost efficiency to minimize the token usage in scan and analyze interviews under development.
+- 
