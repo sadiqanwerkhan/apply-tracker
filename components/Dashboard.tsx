@@ -52,7 +52,6 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
     let total = 0;
 
     try {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const res: Response = await fetch("/api/reclassify", {
           method: "POST",

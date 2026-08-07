@@ -1,6 +1,7 @@
 import { inngest } from "@/lib/inngest";
 import { prisma } from "@/lib/prisma";
 import { runScanChunk } from "@/lib/scanChunk";
+import { listMessageIds } from "@/lib/gmail";
 
 const MAX_CHUNKS = 60;
 
@@ -62,11 +63,19 @@ export const scanInbox = inngest.createFunction(
       await prisma.scanJob.update({ where: { id: jobId }, data: { status: "running" } });
     });
 
+    // List the matching Gmail message ids ONCE for the whole job. As a memoized
+    // step, this does not re-run when a later chunk step is retried within the
+    // same function run — so the expensive Gmail list pass happens a single time
+    // instead of on every chunk.
+    const { ids, truncated } = await step.run("list-message-ids", async () => {
+      return listMessageIds(userId, startDate, endDate);
+    });
+
     let totalProcessed = 0;
 
     for (let i = 0; i < MAX_CHUNKS; i++) {
       const result = await step.run(`chunk-${i}`, async () => {
-        return runScanChunk(userId, startDate, endDate);
+        return runScanChunk(userId, startDate, endDate, ids, truncated);
       });
 
       totalProcessed += result.processed;

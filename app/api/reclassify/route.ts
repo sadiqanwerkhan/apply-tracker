@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { classify, CONFIRM_PHRASES } from "@/lib/classify";
 import { aiClassifyBatch, stageToStatus, Stage } from "@/lib/aiClassify";
+import { checkLimit } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -23,8 +24,15 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
 
+  // Budget guard: each page runs a batch of Claude calls. This endpoint is
+  // called in a loop (one call per page), so the "reclassify" limit is sized in
+  // rateLimit.ts to allow a full inbox pass while still capping repeated re-runs.
+  const limited = await checkLimit(user.id, "reclassify");
+  if (limited) return NextResponse.json(limited, { status: 429 });
+
   const body = await req.json().catch(() => ({}));
-  const cursor: string | undefined = body?.cursor || undefined;
+  // Only accept a string cursor; anything else is treated as "start from the top".
+  const cursor: string | undefined = typeof body?.cursor === "string" ? body.cursor : undefined;
 
   // pull a bounded page of this user's stored emails, oldest id first
   const emails = await prisma.email.findMany({

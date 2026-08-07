@@ -15,15 +15,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Send fresh rows so the dashboard fills in live as the scan progresses.
-  const rows = await buildRows(user.id);
-
-  return NextResponse.json({
+  const base = {
     status: job.status,
     processed: job.processed,
     remaining: job.remaining,
     truncated: job.truncated,
     error: job.error,
-    rows,
-  });
+  };
+
+  // buildRows() reads the user's ENTIRE application history and aggregates it in
+  // memory — far too heavy to run on every 2-second poll. Only compute it when
+  // the scan has finished, or when the client explicitly asks for a refresh
+  // (?rows=1, which the hook sends occasionally so the list still fills in live).
+  const wantsRows = req.nextUrl.searchParams.get("rows") === "1";
+  const isDone = job.status === "complete" || job.status === "failed";
+
+  if (wantsRows || isDone) {
+    const rows = await buildRows(user.id);
+    return NextResponse.json({ ...base, rows });
+  }
+
+  return NextResponse.json(base);
 }

@@ -457,14 +457,14 @@ function OutcomePanel({ row, onClose }: { row: Row; onClose: () => void }) {
   );
 }
 
-function Timeline({ row, allRows }: { row: Row; allRows: Row[] }) {
+function Timeline({ row, allRows, now }: { row: Row; allRows: Row[]; now: number }) {
   const showDetails = hasRealInterview(row);
   const [openPanel, setOpenPanel] = useState<null | "merge" | "outcome">(null);
   const sideBySide = !row.merged && !row.manual;
 
   return (
     <div className="animate-row-expand bg-secondary/30 px-4 py-4 sm:px-6 sm:py-5">
-      {interviewSoon(row, Date.now()) && <PrepNudge row={row} />}
+      {interviewSoon(row, now) && <PrepNudge row={row} />}
 
       <div className="grid gap-6 sm:grid-cols-[minmax(0,280px)_1fr] sm:gap-8">
         {/* Left: meta card + actions */}
@@ -632,7 +632,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={6} className="border-b border-border p-0"><Timeline row={r} allRows={allRows} /></td>
+                      <td colSpan={6} className="border-b border-border p-0"><Timeline row={r} allRows={allRows} now={now} /></td>
                     </tr>
                   )}
                 </Fragment>
@@ -681,7 +681,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
                 </div>
                 <div className="pl-[3.75rem]"><MetaRow r={r} /></div>
               </div>
-              {isOpen && <Timeline row={r} allRows={allRows} />}
+              {isOpen && <Timeline row={r} allRows={allRows} now={now} />}
             </div>
           );
         })}
