@@ -133,4 +133,3 @@ A few decisions worth highlighting:
 - More features in pipeline.
 - Security for tokens saving and encryption are under development.
 - Cost efficiency to minimize the token usage in scan and analyze interviews under development.
-- 
