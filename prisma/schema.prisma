@@ -196,3 +196,30 @@ model ScanJob {
 
   @@index([userId, createdAt])
 }
+
+/// Per-user cache of AI classification results, keyed by a hash of exactly what
+/// the model saw (subject + truncated body). Lets an Inngest chunk retry reuse
+/// results instead of re-paying for the AI calls it already made.
+model ClassificationCache {
+  userId    String
+  hash      String
+  result    Json
+  createdAt DateTime @default(now())
+
+  @@id([userId, hash])
+  @@index([userId])
+}
+
+/// Fixed-window per-user counters for paid actions (scan / analyze / prep /
+/// insights / reclassify). See lib/rateLimit.ts.
+model RateLimit {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  window    String
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, action, window])
+  @@index([userId])
+}

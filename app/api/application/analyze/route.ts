@@ -2,22 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { analyzeInterviews } from "@/lib/analyzeInterviews";
+import { parse, analyzeSchema } from "@/lib/validation";
+import { checkLimit } from "@/lib/rateLimit";
+
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
 
-  const body = await req.json().catch(() => null);
-  if (!body || !body.applicationId) return NextResponse.json({ error: "missing_fields" }, { status: 400 });
+  const raw = await req.json().catch(() => null);
+  const p = parse(analyzeSchema, raw);
+  if (!p.ok) return NextResponse.json({ error: "invalid_input", detail: p.error }, { status: 400 });
+
+  // Budget guard: this endpoint calls Claude.
+  const limited = await checkLimit(user.id, "analyze");
+  if (limited) return NextResponse.json(limited, { status: 429 });
 
   const app = await prisma.application.findUnique({
-    where: { id: String(body.applicationId) },
+    where: { id: p.data.applicationId },
     include: { stages: { orderBy: { order: "asc" }, include: { transcripts: { orderBy: { createdAt: "asc" } } } } },
   });
   if (!app || app.userId !== user.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  // find this application's overall outcome from the Email statuses (rejected/advancing/pending)
-// outcome from THIS application's own emails (including anything merged into it)
+  // outcome from THIS application's own emails (including anything merged into it)
   const memberIds = [
     app.id,
     ...(await prisma.application.findMany({
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
     select: { status: true },
   });
   const manual = app.manualStatus;
-const outcome: "rejected" | "positive" | "unknown" =
+  const outcome: "rejected" | "positive" | "unknown" =
     manual === "Rejected" || emails.some((e) => e.status === "Rejected") ? "rejected"
     : manual === "Advancing" || emails.some((e) => e.status === "Advancing") ? "positive"
     : "unknown";

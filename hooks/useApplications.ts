@@ -169,10 +169,6 @@ export function useApplications() {
     }
   }, [initialLoading]);
 
-  function setStatusFilter(v: StatusFilter) {
-    setStatusFilterState(v);
-  }
-
   async function runScan() {
     setScanning(true);
     setError("");
@@ -205,8 +201,8 @@ export function useApplications() {
         guard++;
         await new Promise((r) => setTimeout(r, 2000));
 
-        const s = await fetch(`/api/scan/status?jobId=${jobId}`);
-        // Only skip on a genuine HTTP failure of the status endpoint itself.
+        const withRows = guard % 5 === 0;
+        const s = await fetch(`/api/scan/status?jobId=${jobId}${withRows ? "&rows=1" : ""}`);        // Only skip on a genuine HTTP failure of the status endpoint itself.
         // A FAILED job carries an error field — that's the signal we act on below.
         if (!s.ok) continue;
         const j = await s.json();
