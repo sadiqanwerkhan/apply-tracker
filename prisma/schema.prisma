@@ -150,6 +150,7 @@ model Application {
   emails        Email[]
   stages        Stage[]
 
+  @@unique([userId, companyKey, roleKey])
   @@index([userId])
   @@index([userId, companyKey])
 }
