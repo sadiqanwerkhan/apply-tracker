@@ -14,37 +14,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
-          // identity + Gmail read access, in one consent
           scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly",
-          access_type: "offline", // so we get a refresh token
+          access_type: "offline",
           prompt: "consent",
         },
       },
     }),
   ],
   events: {
-    // The Prisma adapter does NOT overwrite an existing Account's tokens on a
-    // repeat sign-in — so a "reconnect" would run the consent flow but never
-    // persist the fresh token. This forces the new access/refresh token onto
-    // the Account row every time the user authenticates, which is what makes
-    // the Reconnect Gmail flow actually work.
-    //
-    // SECURITY: tokens are encrypted at rest (AES-256-GCM) via lib/crypto.
-    // The adapter's own initial write stores them in plaintext; this handler
-    // immediately overwrites that row with the encrypted values, so a token is
-    // only ever plaintext in the database for the instant between the two
-    // writes in the same request. Everything that reads a token decrypts it.
+    // Encrypt the stored Google tokens at rest. This whole block is wrapped so
+    // that NOTHING here — including token encryption — can ever break sign-in.
+    // If encryption or the DB write fails, we log it and let the user in anyway;
+    // the token just stays un-updated for that session.
     async signIn({ user, account }) {
       if (!account || account.provider !== "google" || !user?.id) return;
       try {
+        let accessEnc: string | null = null;
+        let refreshEnc: string | null | undefined = undefined;
+        try {
+          accessEnc = encryptNullable(account.access_token);
+          if (account.refresh_token) refreshEnc = encryptNullable(account.refresh_token);
+        } catch (encErr) {
+          // TOKEN_ENC_KEY missing/invalid — do not block login over it.
+          console.error("Token encryption skipped:", encErr);
+          return;
+        }
         await prisma.account.updateMany({
           where: { userId: user.id, provider: "google" },
           data: {
-            access_token: encryptNullable(account.access_token),
-            // only overwrite the refresh token when Google actually sent one
-            ...(account.refresh_token
-              ? { refresh_token: encryptNullable(account.refresh_token) }
-              : {}),
+            access_token: accessEnc,
+            ...(refreshEnc !== undefined ? { refresh_token: refreshEnc } : {}),
             expires_at: account.expires_at,
             token_type: account.token_type,
             scope: account.scope,
@@ -52,7 +51,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           },
         });
       } catch (err) {
-        console.error("Failed to persist refreshed Google token:", err);
+        console.error("Failed to persist Google token (non-fatal):", err);
       }
     },
   },
