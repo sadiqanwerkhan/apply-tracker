@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { handlers } from "@/auth";
 
 // TEMPORARY: wrap the NextAuth handlers so the REAL error is printed to Vercel
@@ -5,7 +6,7 @@ import { handlers } from "@/auth";
 // two-line version once the cause is found.
 const { GET: rawGET, POST: rawPOST } = handlers;
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     return await rawGET(req);
   } catch (err) {
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     return await rawPOST(req);
   } catch (err) {
