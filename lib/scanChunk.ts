@@ -3,7 +3,8 @@ import { classify, extractCompany, extractRole, isPersonalSender, isBulkNoise } 
 import { aiClassifyBatch, stageToStatus, Stage, AiResult } from "@/lib/aiClassify";
 import { prisma } from "@/lib/prisma";
 import { getGmailClient, NoGoogleAccountError } from "@/lib/gmail";
-import { normalizeCompanyKey, normalizeRoleKey, companyKeysMatch } from "@/lib/aggregate";
+import { normalizeCompanyKey, normalizeRoleKey } from "@/lib/aggregate";
+import { matchApplication, AppRef } from "@/lib/matchApplication";
 
 const CHUNK_SIZE = 60;   // emails fully processed per invocation
 const FETCH_CHUNK = 20;  // Gmail body fetches in flight at once
@@ -312,7 +313,6 @@ export async function runScanChunk(
       select: { id: true, company: true, role: true, emails: { select: { date: true } } },
     });
 
-    type AppRef = { id: string; ck: string; rk: string; dates: number[] };
     const apps: AppRef[] = existingApps.map((a) => ({
       id: a.id,
       ck: normalizeCompanyKey(a.company),
@@ -329,42 +329,24 @@ export async function runScanChunk(
     for (const f of finals) {
       const ck = normalizeCompanyKey(f.company);
       const rk = normalizeRoleKey(f.role);
-      const sameCompany = apps.filter((a) => companyKeysMatch(a.ck, ck));
 
-      let appId: string | undefined;
+      // Where does this email belong? Pure decision logic, unit-tested in
+      // lib/matchApplication.test.ts. The DB writes stay here.
+      const decision = matchApplication(apps, { ck, rk, date: f.date });
+      let appId: string;
 
-      // 1) exact role match at this company
-      if (rk) {
-        const exact = sameCompany.find((a) => a.rk === rk);
-        if (exact) appId = exact.id;
-      }
-
-      // 2) NO role on this email → attach to the company's nearest application by date
-      if (!appId && !rk && sameCompany.length > 0) {
-        let best = sameCompany[0];
-        let bestDist = Infinity;
-        for (const a of sameCompany) {
-          const d = a.dates.length ? Math.min(...a.dates.map((t) => Math.abs(t - f.date))) : Infinity;
-          if (d < bestDist) { bestDist = d; best = a; }
-        }
-        appId = best.id;
-      }
-
-      // 3) HAS a role, and this company has a role-less placeholder → adopt it
-      if (!appId && rk) {
-        const placeholder = sameCompany.find((a) => a.rk === "");
-        if (placeholder) {
-          await prisma.application.update({
-            where: { id: placeholder.id },
-            data: { role: f.role, roleKey: rk },
-          });
-          placeholder.rk = rk;
-          appId = placeholder.id;
-        }
-      }
-
-      // 4) genuinely a new role (or a new company) → new application
-      if (!appId) {
+      if (decision.kind === "adopt") {
+        // the company had a role-less placeholder — give it this email's role
+        await prisma.application.update({
+          where: { id: decision.appId },
+          data: { role: f.role, roleKey: rk },
+        });
+        const ph = apps.find((a) => a.id === decision.appId);
+        if (ph) ph.rk = rk;
+        appId = decision.appId;
+      } else if (decision.kind === "attach") {
+        appId = decision.appId;
+      } else {
         const created = await prisma.application.create({
           data: { userId, companyKey: ck, roleKey: rk, company: f.company, role: f.role },
         });
