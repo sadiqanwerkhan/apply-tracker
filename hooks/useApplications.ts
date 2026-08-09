@@ -2,10 +2,12 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Row, StatusFilter } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 const SEEN_KEY = "appsSeenActivity";
+const APPS_KEY = ["applications"] as const;
 
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -38,15 +40,32 @@ export function useApplications() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
 
   const [progress, setProgress] = useState<{ processed: number; remaining: number } | null>(null);
   const [startDate, setStartDate] = useState(SIXTY_AGO);
   const [endDate, setEndDate] = useState(TODAY);
   const [interviewedOnly, setInterviewedOnly] = useState(false);
 
-  const [rows, setRows] = useState<Row[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
+  // ── Data fetching (React Query) ──────────────────────────────────────────
+  // The stored applications live in the query cache under APPS_KEY. Both the
+  // initial load and the scan write here, so `rows` is always the cache value.
+  const { data: rows = [], isLoading: initialLoading } = useQuery({
+    queryKey: APPS_KEY,
+    queryFn: async (): Promise<Row[]> => {
+      const r = await fetch("/api/applications");
+      const d = await r.json();
+      return d.rows ?? [];
+    },
+  });
+
+  // Helper: write rows straight into the cache (used by the scan poll so the
+  // list fills in live, exactly as before).
+  function setRows(next: Row[]) {
+    queryClient.setQueryData(APPS_KEY, next);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [error, setError] = useState("");
   const [needsReconnect, setNeedsReconnect] = useState(false);
 
@@ -147,17 +166,6 @@ export function useApplications() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [search, statusFilter, sortBy, pathname, router]);
 
-  // load stored applications on first render
-  useEffect(() => {
-    fetch("/api/applications")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.rows) setRows(d.rows);
-      })
-      .catch(() => {})
-      .finally(() => setInitialLoading(false));
-  }, []);
-
   // restore scroll position after the list has loaded (set when opening a detail page)
   useEffect(() => {
     if (initialLoading) return;
@@ -169,17 +177,11 @@ export function useApplications() {
     }
   }, [initialLoading]);
 
-  async function runScan() {
-    setScanning(true);
-    setError("");
-    setNeedsReconnect(false);
-    setProgress(null);
-    setPage(1);
-    setSearch("");
-    setStatusFilterState("All");
-    setSortBy("date-desc");
-
-    try {
+  // ── Scan (React Query mutation) ──────────────────────────────────────────
+  // Starts the job and polls to completion. Rows are written into the cache as
+  // they arrive so the list updates live; progress/error handling is unchanged.
+  const scanMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -188,9 +190,7 @@ export function useApplications() {
       const data = await res.json();
 
       if (!res.ok || data.error || !data.jobId) {
-        setError("Could not start the scan. Please try again.");
-        setScanning(false);
-        return;
+        throw new Error("could_not_start");
       }
 
       const jobId: string = data.jobId;
@@ -202,7 +202,8 @@ export function useApplications() {
         await new Promise((r) => setTimeout(r, 2000));
 
         const withRows = guard % 5 === 0;
-        const s = await fetch(`/api/scan/status?jobId=${jobId}${withRows ? "&rows=1" : ""}`);        // Only skip on a genuine HTTP failure of the status endpoint itself.
+        const s = await fetch(`/api/scan/status?jobId=${jobId}${withRows ? "&rows=1" : ""}`);
+        // Only skip on a genuine HTTP failure of the status endpoint itself.
         // A FAILED job carries an error field — that's the signal we act on below.
         if (!s.ok) continue;
         const j = await s.json();
@@ -213,24 +214,45 @@ export function useApplications() {
           setError("Reached the 1000 email limit — narrow your date range to see everything.");
         }
 
-        if (j.status === "complete") break;
+        if (j.status === "complete") return;
         if (j.status === "failed") {
           if (j.error === "reconnect_required") {
-            setNeedsReconnect(true);
-            setError("");
-          } else {
-            setError(j.error || "Scan failed. Please try again.");
+            throw new Error("reconnect_required");
           }
-          break;
+          throw new Error(j.error || "scan_failed");
         }
       }
-    } catch {
-      setError("Scan failed. Please try again.");
-    } finally {
-      setScanning(false);
+    },
+    onMutate: () => {
+      setError("");
+      setNeedsReconnect(false);
       setProgress(null);
-    }
+      setPage(1);
+      setSearch("");
+      setStatusFilterState("All");
+      setSortBy("date-desc");
+    },
+    onError: (err: Error) => {
+      if (err.message === "reconnect_required") {
+        setNeedsReconnect(true);
+        setError("");
+      } else if (err.message === "could_not_start") {
+        setError("Could not start the scan. Please try again.");
+      } else {
+        setError("Scan failed. Please try again.");
+      }
+    },
+    onSettled: () => {
+      setProgress(null);
+    },
+  });
+
+  const scanning = scanMutation.isPending;
+
+  function runScan() {
+    scanMutation.mutate();
   }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const counts = useMemo(
     () => ({
