@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { Zap, RefreshCw, LogOut, MoreVertical, Bell } from "lucide-react";
 import { useApplications } from "@/hooks/useApplications";
@@ -130,6 +131,9 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
 
           {/* DESKTOP: buttons inline */}
           <div className="hidden shrink-0 items-center gap-2 md:flex">
+            <Link href="/skills" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
+              Skills
+            </Link>
           <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
               {!reclassifying && <RefreshCw className="size-3.5" />}
               {reclassifying ? reclassMsg : "Re-check classifications"}
