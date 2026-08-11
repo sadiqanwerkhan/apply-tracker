@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { analyzeInterviews } from "@/lib/analyzeInterviews";
 import { parse, analyzeSchema } from "@/lib/validation";
 import { checkLimit } from "@/lib/rateLimit";
+import { persistSkillSignals } from "@/lib/skills/persistSkillSignals";
 
 export const maxDuration = 60;
 
@@ -61,6 +62,14 @@ export async function POST(req: NextRequest) {
     where: { id: app.id },
     data: { analysis, analysisAt: new Date() },
   });
+
+  // Extract skill signals from the analysis and save them (free keyword layer).
+  // Wrapped so a failure here can NEVER break the analysis the user asked for.
+  try {
+    await persistSkillSignals(app.id, user.id, analysis);
+  } catch (err) {
+    console.error("persistSkillSignals failed (non-fatal):", err);
+  }
 
   return NextResponse.json({ analysis });
 }
