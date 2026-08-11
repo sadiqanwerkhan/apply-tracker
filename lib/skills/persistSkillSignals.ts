@@ -1,38 +1,53 @@
 import { prisma } from "@/lib/prisma";
-import { extractSignalsByKeyword, parseAnalysis } from "./extractSkills";
+import { extractSignalsByKeyword, parseAnalysis, ExtractedSignal } from "./extractSkills";
+import { aiSkillFallback } from "./aiSkillFallback";
 
 /**
  * Extract skill signals from a freshly-computed analysis and save them for this
  * application. Called right after an analysis is stored.
  *
- * Design notes:
- *  - Uses the FREE keyword layer only for now (no AI cost). The `unmatched`
- *    bullets are collected but not yet sent to AI — that's a later enhancement,
- *    and this function is where it will plug in.
- *  - Re-analyzing an application REPLACES its signals (delete-then-insert), so a
- *    user who improves and re-runs analysis doesn't keep stale weak signals.
- *  - Fully guarded by the caller: this must never break the analyze response.
+ * Two-layer extraction (cheap first, AI for the tail):
+ *  1. FREE keyword layer — matches known tech terms in the analysis bullets.
+ *  2. AI fallback — for the bullets where NO keyword matched, Haiku maps them to
+ *     a known skill by meaning. Only runs when `useAi` is true and there ARE
+ *     unmatched bullets, so most analyses cost nothing extra.
  *
- * Returns a small summary (handy for logging / future UI), or null if the
- * analysis had no minable structure.
+ * Re-analyzing REPLACES an application's signals (delete-then-insert). Fully
+ * guarded by the caller: must never break the analyze response.
  */
 export async function persistSkillSignals(
   applicationId: string,
   userId: string,
-  rawAnalysis: string
-): Promise<{ saved: number; unmatched: number } | null> {
+  rawAnalysis: string,
+  useAi: boolean = true
+): Promise<{ saved: number; keyword: number; ai: number } | null> {
   const analysis = parseAnalysis(rawAnalysis);
-  if (!analysis) return null; // old plain-text analysis — nothing structured to mine
+  if (!analysis) return null;
 
-  const { signals, unmatched } = extractSignalsByKeyword(analysis);
+  const { signals: keywordSignals, unmatched } = extractSignalsByKeyword(analysis);
 
-  // Replace this application's signals atomically.
+  // AI fallback only for the bullets the free layer missed.
+  let aiSignals: ExtractedSignal[] = [];
+  if (useAi && unmatched.length > 0) {
+    aiSignals = await aiSkillFallback(unmatched);
+  }
+
+  // Merge, de-duping skill+performance across both layers (keyword wins the source tag).
+  const merged: ExtractedSignal[] = [];
+  const seen = new Set<string>();
+  for (const s of [...keywordSignals, ...aiSignals]) {
+    const key = `${s.skill}|${s.performance}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(s);
+  }
+
   await prisma.$transaction([
     prisma.skillSignal.deleteMany({ where: { applicationId } }),
-    ...(signals.length > 0
+    ...(merged.length > 0
       ? [
           prisma.skillSignal.createMany({
-            data: signals.map((s) => ({
+            data: merged.map((s) => ({
               userId,
               applicationId,
               skill: s.skill,
@@ -44,5 +59,9 @@ export async function persistSkillSignals(
       : []),
   ]);
 
-  return { saved: signals.length, unmatched: unmatched.length };
+  return {
+    saved: merged.length,
+    keyword: keywordSignals.length,
+    ai: aiSignals.length,
+  };
 }
