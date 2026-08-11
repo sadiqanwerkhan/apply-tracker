@@ -149,8 +149,8 @@ model Application {
 
   emails        Email[]
   stages        Stage[]
+  skillSignals  SkillSignal[]
 
-  @@unique([userId, companyKey, roleKey])
   @@index([userId])
   @@index([userId, companyKey])
 }
@@ -223,4 +223,24 @@ model RateLimit {
 
   @@unique([userId, action, window])
   @@index([userId])
+}
+/// One extracted signal that a given skill came up in an interview, and how the
+/// candidate did on it. We keep EVERY signal (not one-per-skill) so we can show
+/// "weak in React 3 times" and track improvement over time.
+/// performance: "strong" | "okay" | "weak"
+/// source: "keyword" (matched a known tech term for free) or "ai" (Haiku mapped
+/// an implied skill from a sentence). Lets us see how much AI we actually needed.
+model SkillSignal {
+  id            String   @id @default(cuid())
+  userId        String
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  skill         String   // canonical skill name, e.g. "React"
+  performance   String   // strong | okay | weak
+  source        String   // keyword | ai
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, skill])
+  @@index([applicationId])
 }
