@@ -4,6 +4,8 @@ import LandingPage from "@/components/LandingPage";
 import { signIn } from "@/auth";
 import { getSkillStats } from "@/lib/skills/getSkillStats";
 import { SkillBars } from "@/components/SkillBars";
+import { LearningPath } from "@/components/LearningPath";
+import { buildLearningPath } from "@/lib/skills/learningPath";
 
 export default async function SkillsPage() {
   const session = await auth();
@@ -17,6 +19,7 @@ export default async function SkillsPage() {
   }
 
   const stats = await getSkillStats(session.user.id as string);
+  const learningPath = buildLearningPath(stats);
   const totalSignals = stats.reduce((n, s) => n + s.total, 0);
   const interviewsWithData = stats.length > 0;
 
@@ -41,6 +44,13 @@ export default async function SkillsPage() {
           </div>
         )}
 
+        {learningPath.length > 0 && (
+          <div className="mb-6">
+            <LearningPath steps={learningPath} />
+          </div>
+        )}
+
+        <h2 className="label-mono mb-3 text-[10px] text-muted-foreground">All skills, ranked by weakness</h2>
         <SkillBars stats={stats} />
 
         {interviewsWithData && (
