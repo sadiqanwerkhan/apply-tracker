@@ -162,6 +162,13 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
 
               {menuOpen && (
                 <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+                  <Link
+                    href="/skills"
+                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                  >
+                    Skills
+                  </Link>
+                  <div className="border-t border-border" />
                   <button
                     onClick={reclassifyAll}
                     disabled={reclassifying}
