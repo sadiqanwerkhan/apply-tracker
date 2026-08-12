@@ -1,8 +1,17 @@
 import type { SkillStat } from "@/lib/skills/getSkillStats";
+import type { SkillCompanies } from "@/lib/skills/getSkillCompanies";
+import { SkillCompanyNote } from "@/components/SkillCompanyNote";
 
 // A ranked list of skills as stacked weak/okay/strong bars — biggest weaknesses
 // on top. Pure CSS (divs), no chart library. Widths are proportional to counts.
-export function SkillBars({ stats }: { stats: SkillStat[] }) {
+// Each bar shows a small note of which companies it was weak/strong at.
+export function SkillBars({
+  stats,
+  companies,
+}: {
+  stats: SkillStat[];
+  companies?: Record<string, SkillCompanies>;
+}) {
   if (stats.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
@@ -33,6 +42,7 @@ export function SkillBars({ stats }: { stats: SkillStat[] }) {
             {s.okay > 0 && <div className="bg-warning" style={{ width: `${(s.okay / s.total) * 100}%` }} />}
             {s.strong > 0 && <div className="bg-success" style={{ width: `${(s.strong / s.total) * 100}%` }} />}
           </div>
+          <SkillCompanyNote companies={companies?.[s.skill]} />
         </div>
       ))}
     </div>

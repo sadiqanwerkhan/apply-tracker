@@ -1,4 +1,6 @@
 import type { LearningStep } from "@/lib/skills/learningPath";
+import type { SkillCompanies } from "@/lib/skills/getSkillCompanies";
+import { SkillCompanyNote } from "@/components/SkillCompanyNote";
 
 // Human labels for the difficulty tiers (must match the tiers in learningPath.ts).
 const TIER_LABEL: Record<number, string> = {
@@ -12,7 +14,13 @@ const TIER_LABEL: Record<number, string> = {
 
 // An ordered "learn this first" study plan. Foundations come before the skills
 // built on them (JavaScript before React before Next.js before System Design).
-export function LearningPath({ steps }: { steps: LearningStep[] }) {
+export function LearningPath({
+  steps,
+  companies,
+}: {
+  steps: LearningStep[];
+  companies?: Record<string, SkillCompanies>;
+}) {
   if (steps.length === 0) return null;
 
   return (
@@ -44,6 +52,7 @@ export function LearningPath({ steps }: { steps: LearningStep[] }) {
                 weak {s.weak}×
               </span>
             </div>
+            <SkillCompanyNote companies={companies?.[s.skill]} />
           </li>
         ))}
       </ol>
