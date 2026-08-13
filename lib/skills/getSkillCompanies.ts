@@ -1,19 +1,20 @@
 import { prisma } from "@/lib/prisma";
 
-// For one skill: which companies rated the user weak, and which strong.
+// For one skill: which companies rated the user weak, strong, or BOTH (mixed).
+// A company that appears as both weak and strong for the same skill is "mixed" —
+// it lives ONLY in mixedAt, never double-listed in weakAt and strongAt. This
+// removes the confusing "weak at X · strong at X" overlap.
 export type SkillCompanies = {
-  weakAt: string[];   // distinct company names where this skill was weak
-  strongAt: string[]; // distinct company names where this skill was strong
+  weakAt: string[];   // companies where this skill was ONLY weak
+  strongAt: string[]; // companies where this skill was ONLY strong
+  mixedAt: string[];  // companies where it was both weak AND strong
 };
 
 /**
- * Build a per-skill company breakdown for a user: for each skill, the distinct
- * companies where it showed up weak vs strong. Pure data (no AI) — every signal
- * links to an application, and applications have a company name, so this is an
- * exact join. "okay" signals are ignored here (only the clear ends are useful
- * for "where did I struggle / shine").
- *
- * Returns a map keyed by skill name.
+ * Build a per-skill company breakdown for a user. Pure data (no AI) — every
+ * signal links to an application with a company name, so this is an exact join.
+ * "okay" signals are ignored (only the clear ends matter for "where I struggled
+ * / shone"). Companies seen as both weak and strong for a skill become "mixed".
  */
 export async function getSkillCompanies(userId: string): Promise<Record<string, SkillCompanies>> {
   const signals = await prisma.skillSignal.findMany({
@@ -37,7 +38,14 @@ export async function getSkillCompanies(userId: string): Promise<Record<string, 
 
   const out: Record<string, SkillCompanies> = {};
   for (const [skill, v] of Object.entries(map)) {
-    out[skill] = { weakAt: [...v.weak], strongAt: [...v.strong] };
+    const weakOnly: string[] = [];
+    const mixed: string[] = [];
+    for (const c of v.weak) {
+      if (v.strong.has(c)) mixed.push(c); // both → mixed
+      else weakOnly.push(c);              // weak only
+    }
+    const strongOnly = [...v.strong].filter((c) => !v.weak.has(c));
+    out[skill] = { weakAt: weakOnly, strongAt: strongOnly, mixedAt: mixed };
   }
   return out;
 }
