@@ -62,11 +62,16 @@ export function SkillList({
                   {s.okay > 0 && <span><span className="tnum font-medium text-foreground/70">{s.okay}</span> okay</span>}
                   {s.strong > 0 && <span><span className="tnum font-medium text-foreground/70">{s.strong}</span> strong</span>}
                 </div>
-                {co && (co.weakAt.length > 0 || co.strongAt.length > 0) && (
+                {co && (co.weakAt.length > 0 || co.strongAt.length > 0 || co.mixedAt.length > 0) && (
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
                     {co.weakAt.length > 0 && (
                       <span className="text-muted-foreground">
                         weak at <span className="text-foreground/70">{cap(co.weakAt)}</span>
+                      </span>
+                    )}
+                    {co.mixedAt.length > 0 && (
+                      <span className="text-muted-foreground">
+                        mixed at <span className="text-foreground/70">{cap(co.mixedAt)}</span>
                       </span>
                     )}
                     {co.strongAt.length > 0 && (
