@@ -1,15 +1,14 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { TOOLS, TOOL_BY_NAME } from "./tools";
 import type { ToolContext } from "./types";
+import {
+  getProvider,
+  callProvider,
+  type ProviderId,
+  type OAIMessage,
+  type OAITool,
+} from "./providers";
 
-const MODEL = "claude-haiku-4-5-20251001";
 const MAX_STEPS = 6; // safety cap on tool-call loops
-
-let client: Anthropic | null = null;
-function getClient() {
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
-  return client;
-}
 
 const SYSTEM = `You are a helpful assistant inside a job-application tracking app. You answer the user's questions about THEIR OWN applications, interviews, stages, and outcomes.
 
@@ -21,10 +20,8 @@ Guidelines:
 - If the user asks about a company they never applied to, say you don't see any application there.
 - Never make up data. Grounded answers only.`;
 
-// The Anthropic tool schemas. We write these as plain JSON (rather than pulling
-// in a zod->json-schema converter) to keep dependencies lean — the tools are
-// simple. Descriptions come from the tool definitions so they stay in sync.
-const JSON_SCHEMAS: Record<string, Anthropic.Tool.InputSchema> = {
+// Tool schemas in OpenAI-compatible format (Groq & Gemini both use this).
+const TOOL_PARAMS: Record<string, object> = {
   find_applications: {
     type: "object",
     properties: {
@@ -40,57 +37,70 @@ const JSON_SCHEMAS: Record<string, Anthropic.Tool.InputSchema> = {
   },
 };
 
-function toolDefs(): Anthropic.Tool[] {
+function toolDefs(): OAITool[] {
   return TOOLS.map((t) => ({
-    name: t.name,
-    description: t.description,
-    input_schema: JSON_SCHEMAS[t.name] ?? { type: "object", properties: {} },
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: TOOL_PARAMS[t.name] ?? { type: "object", properties: {} },
+    },
   }));
 }
 
 export type AgentResult = {
   answer: string;
-  toolsUsed: string[]; // which tools the agent called (nice for transparency/debug)
+  toolsUsed: string[];
+  provider: string; // which model provider answered (for transparency)
 };
 
 /**
- * Run the agent loop: send the question + tools to the model, and whenever the
- * model asks to call a tool, run it, feed the result back, and continue — until
- * the model produces a final text answer (or we hit MAX_STEPS).
+ * Run the agent loop on a free provider (Groq or Gemini). The model can CALL
+ * TOOLS in a loop to gather the user's real data before answering. Without tools
+ * it could only guess; with them it answers grounded in facts.
  *
- * This is the essence of an "agent": a model that can CALL TOOLS in a loop to
- * gather what it needs before answering. Without tools it can only guess; with
- * them it reads real data and answers grounded in facts.
+ * @param providerId "groq" | "gemini" — which free model to use. Falls back to
+ *   whichever API key is configured.
  */
-export async function runAgent(question: string, ctx: ToolContext): Promise<AgentResult> {
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
+export async function runAgent(
+  question: string,
+  ctx: ToolContext,
+  providerId?: ProviderId
+): Promise<AgentResult> {
+  const provider = getProvider(providerId);
+  const tools = toolDefs();
+  const messages: OAIMessage[] = [
+    { role: "system", content: SYSTEM },
+    { role: "user", content: question },
+  ];
   const toolsUsed: string[] = [];
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: SYSTEM,
-      tools: toolDefs(),
-      messages,
-    });
+    const response = await callProvider(provider, messages, tools);
+    const choice = response.choices?.[0];
+    const msg = choice?.message;
 
-    // If the model wants to use tools, run them and loop.
-    if (response.stop_reason === "tool_use") {
-      messages.push({ role: "assistant", content: response.content });
+    // If the model wants to call tools, run them and feed results back.
+    if (msg?.tool_calls && msg.tool_calls.length > 0) {
+      // Push the assistant turn (with its tool calls) into the history.
+      messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
 
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of response.content) {
-        if (block.type !== "tool_use") continue;
-        toolsUsed.push(block.name);
-        const tool = TOOL_BY_NAME[block.name];
+      for (const call of msg.tool_calls) {
+        const name = call.function.name;
+        toolsUsed.push(name);
+        const tool = TOOL_BY_NAME[name];
 
         let resultData: unknown;
         if (!tool) {
-          resultData = { error: `Unknown tool: ${block.name}` };
+          resultData = { error: `Unknown tool: ${name}` };
         } else {
-          // Validate the model's input against the tool's schema before running.
-          const parsed = tool.inputSchema.safeParse(block.input);
+          let args: unknown = {};
+          try {
+            args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+          } catch {
+            args = {};
+          }
+          const parsed = tool.inputSchema.safeParse(args);
           if (!parsed.success) {
             resultData = { error: "Invalid tool input", detail: parsed.error.flatten() };
           } else {
@@ -102,26 +112,23 @@ export async function runAgent(question: string, ctx: ToolContext): Promise<Agen
           }
         }
 
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
           content: JSON.stringify(resultData),
         });
       }
-
-      messages.push({ role: "user", content: toolResults });
-      continue; // let the model see the results and decide next step
+      continue; // let the model see the tool results and continue
     }
 
-    // Otherwise the model gave a final answer.
-    const answer = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-
-    return { answer: answer || "I couldn't find an answer to that.", toolsUsed };
+    // Otherwise it's a final answer.
+    const answer = (msg?.content || "").trim();
+    return {
+      answer: answer || "I couldn't find an answer to that.",
+      toolsUsed,
+      provider: provider.label,
+    };
   }
 
-  return { answer: "That took too many steps — try asking something more specific.", toolsUsed };
+  return { answer: "That took too many steps — try asking something more specific.", toolsUsed, provider: provider.label };
 }
