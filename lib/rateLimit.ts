@@ -42,6 +42,8 @@ export const LIMITS = {
   // pages, so this is sized to allow a full pass of a large inbox (~2400 emails)
   // per day while still capping repeated full re-runs.
   reclassify: { max: 60, windowMs: 24 * 60 * 60 * 1000 },
+  // chat/agent questions — each is one Haiku call plus a few tool loops.
+  ask:        { max: 60, windowMs: 24 * 60 * 60 * 1000 },
 } as const;
 
 export type LimitAction = keyof typeof LIMITS;
