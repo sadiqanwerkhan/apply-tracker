@@ -16,6 +16,28 @@ export function AskChat() {
   const [provider, setProvider] = useState<Provider>("groq");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  // Load saved chat history on first mount so the conversation persists.
+  useEffect(() => {
+    let active = true;
+    fetch("/api/ask")
+      .then((r) => r.json())
+      .then((d) => {
+        if (active && Array.isArray(d.messages)) {
+          setMessages(d.messages.map((m: { role: string; content: string }) => ({ role: m.role, text: m.content })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setLoadingHistory(false); });
+    return () => { active = false; };
+  }, []);
+
+  async function clearHistory() {
+    if (!confirm("Clear your chat history? This can't be undone.")) return;
+    setMessages([]);
+    try { await fetch("/api/ask", { method: "DELETE" }); } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -67,22 +89,29 @@ export function AskChat() {
           <h2 className="text-sm font-semibold text-foreground">Ask about your applications</h2>
           <p className="text-[12px] text-muted-foreground">Answers use your real interview data.</p>
         </div>
-        <label className="flex shrink-0 items-center gap-1.5 text-[12px] text-muted-foreground">
-          <span className="hidden sm:inline">Model</span>
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as Provider)}
-            className="rounded-lg border border-input bg-background px-2 py-1.5 text-[13px] text-foreground outline-none focus:border-accent"
-          >
-            <option value="groq">{PROVIDER_LABELS.groq}</option>
-            <option value="gemini">{PROVIDER_LABELS.gemini}</option>
-          </select>
-        </label>
+        <div className="flex shrink-0 items-center gap-2">
+          {messages.length > 0 && (
+            <button onClick={clearHistory} className="text-[12px] text-muted-foreground hover:text-danger transition-colors">
+              Clear
+            </button>
+          )}
+          <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <span className="hidden sm:inline">Model</span>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as Provider)}
+              className="rounded-lg border border-input bg-background px-2 py-1.5 text-[13px] text-foreground outline-none focus:border-accent"
+            >
+              <option value="groq">{PROVIDER_LABELS.groq}</option>
+              <option value="gemini">{PROVIDER_LABELS.gemini}</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       {/* messages */}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && (
+        {!loadingHistory && messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <p className="max-w-xs text-sm text-muted-foreground">
               Ask a question about your job search — like the ones below.
