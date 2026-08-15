@@ -251,3 +251,14 @@
   background: color-mix(in oklab, var(--foreground) 28%, transparent);
   background-clip: content-box;
 }
+/* Prevent iOS Safari from auto-zooming when focusing a text field. iOS zooms
+   whenever an input's font-size is below 16px; forcing 16px on small screens
+   stops that. Desktop keeps whatever Tailwind classes set. Applies app-wide so
+   every current and future input behaves correctly on mobile. */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
