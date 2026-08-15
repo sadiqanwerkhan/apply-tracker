@@ -1,12 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-const MODEL = "claude-haiku-4-5-20251001";
-
-let client: Anthropic | null = null;
-function getClient() {
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
-  return client;
-}
+import { llmComplete } from "./llm";
 
 export type AnalyzeInput = {
   company: string;
@@ -16,8 +8,6 @@ export type AnalyzeInput = {
 };
 
 export async function analyzeInterviews(input: AnalyzeInput): Promise<string | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-
   const blocks: string[] = [];
   for (const stage of input.stages) {
     for (const t of stage.transcripts) {
@@ -75,26 +65,14 @@ TRANSCRIPTS:
 
 ${blocks.join("\n\n---\n\n")}`;
 
+  const text = await llmComplete({ system: "You analyze interview transcripts and reply with only a JSON object.", user: prompt, maxTokens: 2000, json: true });
+  if (!text) return null;
+  const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   try {
-    const message = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 2000,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const block = message.content[0];
-    const text = block.type === "text" ? block.text.trim() : "";
-    const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-    try {
-      const parsed = JSON.parse(clean);
-      if (parsed && Array.isArray(parsed.sections)) {
-        return JSON.stringify(parsed);
-      }
-    } catch {
-      // not JSON — fall through to raw text
-    }
-    return text || null;
-  } catch (err) {
-    console.error("Interview analysis error:", err);
-    return null;
+    const parsed = JSON.parse(clean);
+    if (parsed && Array.isArray(parsed.sections)) return JSON.stringify(parsed);
+  } catch {
+    // not JSON — fall through to raw text
   }
+  return text || null;
 }
