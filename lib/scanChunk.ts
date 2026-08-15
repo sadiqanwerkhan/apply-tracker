@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { classify, extractCompany, extractRole, isPersonalSender, isBulkNoise } from "@/lib/classify";
-import { aiClassifyBatch, stageToStatus, Stage, AiResult } from "@/lib/aiClassify";
+import { stageToStatus, Stage, AiResult } from "@/lib/aiClassify";
+import { classifyBatch } from "@/lib/classifyEngine";
 import { prisma } from "@/lib/prisma";
 import { getGmailClient, NoGoogleAccountError } from "@/lib/gmail";
 import { normalizeCompanyKey, normalizeRoleKey } from "@/lib/aggregate";
@@ -246,7 +247,7 @@ export async function runScanChunk(
       for (let i = 0; i < batches.length; i += AI_PARALLEL) {
         const group = batches.slice(i, i + AI_PARALLEL);
         const results = await Promise.all(
-          group.map((b) => aiClassifyBatch(b.map(([, p]) => ({ subject: p.subject, body: p.body }))))
+          group.map((b) => classifyBatch(b.map(([, p]) => ({ subject: p.subject, body: p.body }))))
         );
         for (let g = 0; g < group.length; g++) {
           const batch = group[g];
