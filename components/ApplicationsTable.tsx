@@ -58,6 +58,52 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
     return () => clearInterval(t);
   }, []);
 
+  // ── Multi-select (bulk delete) ────────────────────────────────────────────
+  // Off by default so the normal experience is unchanged. Toggling "Select"
+  // reveals checkboxes; a floating bar shows the count and a Delete action.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  function toggleId(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+    setSelectMode(false);
+  }
+  const allVisibleSelected = items.length > 0 && items.every((r) => selected.has(r.id));
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      if (items.every((r) => prev.has(r.id))) {
+        const next = new Set(prev);
+        items.forEach((r) => next.delete(r.id));
+        return next;
+      }
+      const next = new Set(prev);
+      items.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }
+  async function deleteSelected() {
+    if (selected.size === 0 || deleting) return;
+    if (!confirm(`Delete ${selected.size} selected application${selected.size > 1 ? "s" : ""}? This removes them from your list and database.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/applications/delete-many", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selected] }),
+      });
+      if (res.ok) window.location.reload();
+      else { alert("Couldn't delete. Please try again."); setDeleting(false); }
+    } catch { alert("Something went wrong."); setDeleting(false); }
+  }
+
   // restore which row was expanded before navigating to a detail page.
   useEffect(() => {
     if (items.length === 0) return;
@@ -87,6 +133,32 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
 
   return (
     <div>
+      {/* Selection toolbar */}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        {selectMode ? (
+          <div className="flex items-center gap-3 text-sm">
+            <button onClick={toggleSelectAll} className="text-accent hover:underline">
+              {allVisibleSelected ? "Deselect all" : "Select all"}
+            </button>
+            <span className="text-muted-foreground">{selected.size} selected</span>
+          </div>
+        ) : (
+          <div />
+        )}
+        {selectMode ? (
+          <button onClick={clearSelection} className="text-sm text-muted-foreground hover:text-foreground">
+            Cancel
+          </button>
+        ) : (
+          <button
+            onClick={() => setSelectMode(true)}
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary"
+          >
+            Select
+          </button>
+        )}
+      </div>
+
       {/* DESKTOP: table */}
       <div className="hidden overflow-x-auto lg:block">
       <table className="w-full min-w-[760px] text-sm">
@@ -109,13 +181,23 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
               return (
                 <Fragment key={i}>
                   <tr
-                    onClick={() => { onSeen?.(r.id); setExpanded(isOpen ? null : i); }}
+                    onClick={() => { if (selectMode) { toggleId(r.id); } else { onSeen?.(r.id); setExpanded(isOpen ? null : i); } }}
                     className={`cursor-pointer border-b border-border/70 transition-colors ${
-                      isNew ? "bg-accent/[0.06] hover:bg-accent/10" : "hover:bg-secondary/60"
+                      selected.has(r.id) ? "bg-accent/10" : isNew ? "bg-accent/[0.06] hover:bg-accent/10" : "hover:bg-secondary/60"
                     }`}
                   >
                     <td className="px-3 py-3 font-medium text-foreground">
                       <div className="flex flex-wrap items-center gap-2">
+                        {selectMode && (
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.id)}
+                            onChange={() => toggleId(r.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="size-4 shrink-0 accent-accent"
+                            aria-label={`Select ${r.company}`}
+                          />
+                        )}
                         <span className="inline-flex min-w-0 items-center gap-2.5">
                           <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isOpen ? "rotate-90 text-foreground" : ""}`} />
                           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-[11px] font-semibold text-foreground/70">
@@ -168,13 +250,24 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
               }`}
             >
               <div
-                onClick={() => { onSeen?.(r.id); setExpanded(isOpen ? null : i); }}
-                className="cursor-pointer p-4"
+                onClick={() => { if (selectMode) { toggleId(r.id); } else { onSeen?.(r.id); setExpanded(isOpen ? null : i); } }}
+                className={`cursor-pointer p-4 ${selected.has(r.id) ? "bg-accent/10" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 break-words font-medium text-foreground">
-                      <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isOpen ? "rotate-90 text-foreground" : ""}`} />
+                      {selectMode ? (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleId(r.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="size-4 shrink-0 accent-accent"
+                          aria-label={`Select ${r.company}`}
+                        />
+                      ) : (
+                        <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isOpen ? "rotate-90 text-foreground" : ""}`} />
+                      )}
                       <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-[10px] font-semibold text-foreground/70">
                         {initials(r.company)}
                       </span>
@@ -197,6 +290,25 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
           );
         })}
       </div>
+
+      {/* Floating bulk-delete bar */}
+      {selectMode && selected.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
+          <div className="flex items-center gap-3 rounded-full border border-border bg-popover px-4 py-2.5 shadow-lg">
+            <span className="text-sm text-foreground">{selected.size} selected</span>
+            <button
+              onClick={deleteSelected}
+              disabled={deleting}
+              className="rounded-full bg-danger px-4 py-1.5 text-sm font-medium text-white transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+            <button onClick={clearSelection} className="text-sm text-muted-foreground hover:text-foreground">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
