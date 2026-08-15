@@ -5,8 +5,10 @@ import LandingPage from "@/components/LandingPage";
 import { getSkillStats } from "@/lib/skills/getSkillStats";
 import { buildLearningPath } from "@/lib/skills/learningPath";
 import { getSkillCompanies } from "@/lib/skills/getSkillCompanies";
+import { getSkillFrequency } from "@/lib/skills/getSkillFrequency";
 import { SkillList } from "@/components/SkillList";
 import { StrengthList } from "@/components/StrengthList";
+import { SkillFrequency } from "@/components/SkillFrequency";
 
 export default async function SkillsPage() {
   const session = await auth();
@@ -23,6 +25,7 @@ export default async function SkillsPage() {
   const stats = await getSkillStats(userId);
   const learningPath = buildLearningPath(stats);
   const companies = await getSkillCompanies(userId);
+  const frequency = await getSkillFrequency(userId);
 
   const statsBySkill = Object.fromEntries(stats.map((s) => [s.skill, s]));
   const weakSkillNames = new Set(learningPath.map((s) => s.skill));
@@ -60,6 +63,12 @@ export default async function SkillsPage() {
               <span><span className="font-semibold text-foreground">{learningPath.length}</span> to work on</span>
               <span><span className="font-semibold text-foreground">{totalSignals}</span> signals</span>
             </div>
+
+            {frequency.length > 0 && (
+              <section className="mb-8">
+                <SkillFrequency data={frequency} />
+              </section>
+            )}
 
             {learningPath.length > 0 && (
               <section className="mb-8">
