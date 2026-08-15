@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { Row, STAGE_LABELS } from "@/lib/types";
 import { statusMeta, stageClasses, initials, interviewSoon, formatInterview, shortWhen } from "../components/applications-table/shared";
@@ -64,6 +65,7 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const queryClient = useQueryClient();
 
   function toggleId(id: string) {
     setSelected((prev) => {
@@ -99,8 +101,11 @@ export default function ApplicationsTable({ items, allRows, scanning, emptyMessa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: [...selected] }),
       });
-      if (res.ok) window.location.reload();
-      else { alert("Couldn't delete. Please try again."); setDeleting(false); }
+      if (res.ok) {
+        await queryClient.invalidateQueries({ queryKey: ["applications"] });
+        clearSelection();
+        setDeleting(false);
+      } else { alert("Couldn't delete. Please try again."); setDeleting(false); }
     } catch { alert("Something went wrong."); setDeleting(false); }
   }
 
