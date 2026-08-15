@@ -6,6 +6,7 @@ import { Row, STAGE_LABELS } from "@/lib/types";
 import { hasRealInterview, interviewSoon, formatInterview, dotClasses, seedAndOpen, STAGE_TYPE_LABELS } from "./shared";
 import { MergeButton, MergePanel } from "./MergePanel";
 import { OutcomeButton, OutcomePanel } from "./OutcomePanel";
+import { DeleteButton } from "./DeleteButton";
 
 function ViewDetailsButton({ row }: { row: Row }) {
   const router = useRouter();
@@ -118,6 +119,7 @@ export function Timeline({ row, allRows, now }: { row: Row; allRows: Row[]; now:
               <MergeButton row={row} active={openPanel === "merge"} onToggle={() => setOpenPanel((p) => (p === "merge" ? null : "merge"))} />
               <OutcomeButton row={row} active={openPanel === "outcome"} onToggle={() => setOpenPanel((p) => (p === "outcome" ? null : "outcome"))} />
             </div>
+            <DeleteButton row={row} />
           </div>
         </div>
 
