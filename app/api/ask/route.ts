@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { checkLimit } from "@/lib/rateLimit";
 import { runAgent } from "@/lib/agent/runAgent";
@@ -6,9 +7,22 @@ import type { ProviderId } from "@/lib/agent/providers";
 
 export const maxDuration = 60;
 
-// The chat/agent endpoint. Takes a question and an optional model provider
-// ("groq" | "gemini", both free), runs the agent (which calls the query tools
-// as needed), and returns a grounded answer. Guards: auth + per-user budget.
+// GET — load this user's saved chat history (most recent 100 messages).
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+
+  const messages = await prisma.chatMessage.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+    select: { role: true, content: true },
+  });
+  return NextResponse.json({ messages });
+}
+
+// POST — ask a question. Runs the agent, saves both the question and the answer
+// so the conversation persists across visits.
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -26,11 +40,31 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runAgent(question, { userId: user.id }, provider);
+
+    // Persist the exchange (non-fatal — a save failure shouldn't lose the answer).
+    try {
+      await prisma.chatMessage.createMany({
+        data: [
+          { userId: user.id, role: "user", content: question },
+          { userId: user.id, role: "assistant", content: result.answer },
+        ],
+      });
+    } catch (saveErr) {
+      console.error("chat history save failed (non-fatal):", saveErr);
+    }
+
     return NextResponse.json(result);
   } catch (err) {
     console.error("agent error:", err);
-    // Surface a helpful message (e.g. missing API key) without leaking internals.
     const msg = err instanceof Error ? err.message : "agent_failed";
     return NextResponse.json({ error: "agent_failed", detail: msg }, { status: 500 });
   }
+}
+
+// DELETE — clear this user's chat history.
+export async function DELETE() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  await prisma.chatMessage.deleteMany({ where: { userId: user.id } });
+  return NextResponse.json({ ok: true });
 }
