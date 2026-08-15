@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Row } from "@/lib/types";
 import { triggerClass } from "./shared";
 
@@ -10,6 +11,7 @@ import { triggerClass } from "./shared";
 // so this is a safe prune, not a data wipe.
 export function DeleteButton({ row }: { row: Row }) {
   const [deleting, setDeleting] = useState(false);
+  const queryClient = useQueryClient();
 
   async function remove() {
     if (deleting) return;
@@ -24,7 +26,8 @@ export function DeleteButton({ row }: { row: Row }) {
         body: JSON.stringify({ id: row.id }),
       });
       if (res.ok) {
-        window.location.reload();
+        // Smoothly refresh the list from cache — no full page reload.
+        await queryClient.invalidateQueries({ queryKey: ["applications"] });
       } else {
         alert("Couldn't delete this application. Please try again.");
         setDeleting(false);
