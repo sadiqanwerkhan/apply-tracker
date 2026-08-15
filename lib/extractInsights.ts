@@ -1,12 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-const MODEL = "claude-haiku-4-5-20251001";
-
-let client: Anthropic | null = null;
-function getClient() {
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
-  return client;
-}
+import { llmComplete, parseJsonLoose } from "./llm";
 
 export type InsightsInput = {
   company: string;
@@ -28,8 +20,6 @@ export type Insights = {
 };
 
 export async function extractInsights(input: InsightsInput): Promise<Insights | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-
   const blocks: string[] = [];
   for (const stage of input.stages) {
     for (const t of stage.transcripts) {
@@ -60,27 +50,6 @@ Respond with ONLY the JSON object — no markdown, no backticks, no preamble.
 Transcripts:
 ${blocks.join("\n\n")}`;
 
-  try {
-    const res = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const text = res.content
-      .filter((b) => b.type === "text")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((b) => (b as any).text)
-      .join("")
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
-
-    const parsed = JSON.parse(text) as Insights;
-    return parsed;
-  } catch (err) {
-    console.error("extractInsights failed:", err);
-    return null;
-  }
+  const text = await llmComplete({ system: "You extract structured facts from interview transcripts and reply with only JSON.", user: prompt, maxTokens: 1024, json: true });
+  return parseJsonLoose<Insights>(text);
 }

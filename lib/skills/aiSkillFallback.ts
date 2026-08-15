@@ -1,8 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { SKILL_KEYWORDS } from "./skillKeywords";
 import type { ExtractedSignal } from "./extractSkills";
-
-const MODEL = "claude-haiku-4-5-20251001";
+import { llmComplete } from "../llm";
 
 // The AI may ONLY return skills from this fixed list — the same canonical names
 // the keyword layer uses. This keeps skills consistent across both layers and
@@ -10,12 +8,6 @@ const MODEL = "claude-haiku-4-5-20251001";
 // output to a known set" idea is the core of reliable AI extraction.
 const ALLOWED_SKILLS = SKILL_KEYWORDS.map((k) => k.canonical);
 const ALLOWED_SET = new Set(ALLOWED_SKILLS);
-
-let client: Anthropic | null = null;
-function getClient() {
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
-  return client;
-}
 
 const SYSTEM = `You map interview-feedback sentences to a fixed list of skills.
 
@@ -52,20 +44,20 @@ export async function aiSkillFallback(
     .map((u, i) => `${i + 1}. [${u.performance}] ${u.text}`)
     .join("\n");
 
+  const text = await llmComplete({ system: SYSTEM, user: list, maxTokens: 1000, json: true });
+  if (!text) return [];
+  const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  let arr: unknown;
   try {
-    const message = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 1000,
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: list }],
-    });
+    const parsed = JSON.parse(clean);
+    // json mode may wrap the array in an object — unwrap a single array property.
+    arr = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === "object" ? Object.values(parsed).find((v) => Array.isArray(v)) : null);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr) || arr.length !== unmatched.length) return [];
 
-    const block = message.content[0];
-    const text = block.type === "text" ? block.text.trim() : "";
-    const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const arr = JSON.parse(clean);
-
-    if (!Array.isArray(arr) || arr.length !== unmatched.length) return [];
+  try {
 
     const out: ExtractedSignal[] = [];
     const seen = new Set<string>(); // de-dupe skill+performance

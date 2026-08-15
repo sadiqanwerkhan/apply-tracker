@@ -1,12 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-const MODEL = "claude-haiku-4-5-20251001";
-
-let client: Anthropic | null = null;
-function getClient() {
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
-  return client;
-}
+import { llmComplete, parseJsonLoose } from "./llm";
 
 export type PrepInput = {
   company: string;
@@ -35,8 +27,6 @@ const TYPE_GUIDANCE: Record<string, string> = {
   };
 
 export async function generatePrep(input: PrepInput): Promise<Prep | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-
   const hasPrior = input.priorTranscripts.some((t) => t.content.trim());
   const hasJD = !!(input.jobDescription && input.jobDescription.trim());
 
@@ -77,26 +67,6 @@ Guidance:
 
 Respond with ONLY the JSON object — no markdown, no backticks, no preamble.`;
 
-  try {
-    const res = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const text = res.content
-      .filter((b) => b.type === "text")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((b) => (b as any).text)
-      .join("")
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
-
-    return JSON.parse(text) as Prep;
-  } catch (err) {
-    console.error("generatePrep failed:", err);
-    return null;
-  }
+  const text = await llmComplete({ system: "You are a supportive interview coach who replies with only JSON.", user: prompt, maxTokens: 1024, json: true });
+  return parseJsonLoose<Prep>(text);
 }
