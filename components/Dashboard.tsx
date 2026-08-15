@@ -131,6 +131,9 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
 
           {/* DESKTOP: buttons inline */}
           <div className="hidden shrink-0 items-center gap-2 md:flex">
+            <Link href="/ask" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
+              Ask
+            </Link>
             <Link href="/skills" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
               Skills
             </Link>
@@ -162,6 +165,13 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
 
               {menuOpen && (
                 <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+                  <Link
+                    href="/ask"
+                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                  >
+                    Ask
+                  </Link>
+                  <div className="border-t border-border" />
                   <Link
                     href="/skills"
                     className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
