@@ -19,6 +19,7 @@ export async function buildRows(userId: string): Promise<Row[]> {
   // dashboard shows (the email timeline is noisier: an invite and its confirmation
   // can look like two different stages).
   const now = Date.now();
+  const hasStagesByApp = new Set(apps.filter((a) => a.stages.length > 0).map((a) => a.id));
   const nextInterviewByApp = new Map<string, { at: number; name: string; type: string }>();
   for (const a of apps) {
     let best: { at: number; name: string; type: string } | null = null;
@@ -55,6 +56,7 @@ export async function buildRows(userId: string): Promise<Row[]> {
     const ni = nextInterviewByApp.get(r.id);
     return {
       ...r,
+      hasStages: hasStagesByApp.has(r.id),
       nextInterviewAt: ni ? ni.at : null,
       nextInterviewName: ni ? ni.name : null,
       nextInterviewType: ni ? ni.type : null,

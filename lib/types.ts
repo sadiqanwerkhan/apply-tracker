@@ -11,6 +11,7 @@ export type Row = {
   company: string;
   role: string;
   status: string;
+  hasStages?: boolean;  // true if the app has real interview Stage records (drives the details button)
   confidence: string;
   sender: string;
   firstSeen: string;

@@ -40,6 +40,11 @@ export function initials(name: string) {
 // interview happened — i.e. a timeline event beyond "applied"/"rejected"/"update".
 const NON_INTERVIEW_STAGES = new Set(["applied", "rejected", "update"]);
 export function hasRealInterview(row: Row): boolean {
+  // Prefer the authoritative signal: does the application actually have interview
+  // Stage records in the database? This is set from the Stage table and can't be
+  // corrupted by email re-classification. Fall back to the email timeline only
+  // when the flag isn't present (older data paths).
+  if (row.hasStages) return true;
   return (row.timeline || []).some((t) => !NON_INTERVIEW_STAGES.has(t.stage));
 }
 
