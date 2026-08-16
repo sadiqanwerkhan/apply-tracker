@@ -15,3 +15,12 @@ export const getApplicationDetailInput = z.object({
   applicationId: z.string().optional().describe("The application id from find_applications."),
   company: z.string().optional().describe("Company name, if you don't have an id."),
 });
+
+// Raw Zod shapes (the object's field map) — the MCP SDK's registerTool wants the
+// shape, not the wrapped z.object. Exported so the MCP server can register these
+// same tools without redefining their inputs.
+export const findApplicationsShape = { company: findApplicationsInput.shape.company };
+export const getApplicationDetailShape = {
+  applicationId: getApplicationDetailInput.shape.applicationId,
+  company: getApplicationDetailInput.shape.company,
+};

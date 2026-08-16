@@ -42,6 +42,7 @@ model User {
   sessions      Session[]
   emails        Email[]
   chatMessages  ChatMessage[]
+  mcpTokens     McpToken[]
 }
 
 model Account {
@@ -257,4 +258,21 @@ model ChatMessage {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// A personal access token that lets an external MCP client (e.g. Claude Desktop)
+/// act as this user when calling the app's MCP server. We store only a HASH of
+/// the token (never the raw value), the same way passwords are stored — so even
+/// if the database leaked, the tokens couldn't be used. The raw token is shown
+/// to the user exactly once, at creation.
+model McpToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  label      String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

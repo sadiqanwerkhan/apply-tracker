@@ -137,6 +137,9 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             <Link href="/skills" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
               Skills
             </Link>
+            <Link href="/settings" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
+              Settings
+            </Link>
           <Button onClick={reclassifyAll} disabled={reclassifying} loading={reclassifying} variant="secondary" size="sm">
               {!reclassifying && <RefreshCw className="size-3.5" />}
               {reclassifying ? reclassMsg : "Re-check classifications"}
@@ -177,6 +180,13 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
                     className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
                   >
                     Skills
+                  </Link>
+                  <div className="border-t border-border" />
+                  <Link
+                    href="/settings"
+                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                  >
+                    Settings
                   </Link>
                   <div className="border-t border-border" />
                   <button
