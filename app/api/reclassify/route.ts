@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { classify, CONFIRM_PHRASES } from "@/lib/classify";
-import { aiClassifyBatch, stageToStatus, Stage } from "@/lib/aiClassify";
+import { stageToStatus, Stage } from "@/lib/aiClassify";
+import { classifyBatch } from "@/lib/classifyEngine";
 import { checkLimit } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
 
   // We only stored subject + summary (not full body). Re-run AI on subject+summary,
   // which is what the classifier needs for stage/company/role.
-  const ai = await aiClassifyBatch(
+  const ai = await classifyBatch(
     emails.map((e) => ({ subject: e.subject, body: e.summary || "" }))
   );
 
@@ -59,6 +60,11 @@ export async function POST(req: Request) {
     const e = emails[i];
     const r = ai[i];
 
+    // SAFETY: if the model failed for this email (r is null), do NOT touch it.
+    // Overwriting with a keyword-only guess is what corrupted data before, so a
+    // failed AI call now leaves the existing classification untouched.
+    if (!r) continue;
+
     const text = `${e.subject} ${e.summary || ""}`.toLowerCase();
     const kwStage = keywordStage(e.subject, e.summary || "");
     // Same rule as the live scan: a confirmation email with a stray rejection
@@ -66,7 +72,7 @@ export async function POST(req: Request) {
     const looksLikeConfirmation = CONFIRM_PHRASES.some((p) => text.includes(p));
     const looksLikeRejection = kwStage === "rejected" && !looksLikeConfirmation;
 
-    const newStage: Stage = looksLikeRejection ? "rejected" : (r ? r.stage : kwStage);
+    const newStage: Stage = looksLikeRejection ? "rejected" : r.stage;
     const newStatus = stageToStatus(newStage);
 
     if (newStage !== e.stage || newStatus !== e.status) {
