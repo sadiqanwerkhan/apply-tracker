@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "out=$(npm test 2>&1) || { printf '%s\\n' \"$out\" >&2; exit 2; }",
+            "timeout": 120,
+            "statusMessage": "Running tests…"
+          }
+        ]
+      }
+    ]
+  }
+}
