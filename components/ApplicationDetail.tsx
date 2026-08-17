@@ -54,7 +54,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
       });
       const data = await res.json();
       if (res.ok && data.analysis) { setAnalysis(data.analysis); setAnalysisOpen(true); }
-      else alert(data.error === "no_analysis" ? "Add at least one transcript first." : "Analysis failed. Please try again.");
+      else if (data.error === "no_analysis") alert("The AI analysis service is busy or rate-limited right now. Please wait a moment and try again."); else if (data.error === "rate_limited") alert("Daily analysis limit reached. Please try again tomorrow."); else alert("Analysis failed. Please try again.");
     } catch {
       alert("Analysis failed. Please try again.");
     } finally {
@@ -72,7 +72,7 @@ export default function ApplicationDetail({ application }: { application: AppT }
       });
       const data = await res.json();
       if (res.ok && data.insights) { setInsights(data.insights); setInsightsOpen(true); }
-      else alert(data.error === "no_insights" ? "Add at least one transcript first." : "Could not extract insights. Please try again.");
+      else if (data.error === "no_insights") alert("The AI service is busy or rate-limited right now. Please wait a moment and try again."); else alert("Could not extract insights. Please try again.");
     } catch {
       alert("Could not extract insights. Please try again.");
     } finally {

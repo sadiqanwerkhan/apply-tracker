@@ -13,7 +13,7 @@ export async function analyzeInterviews(input: AnalyzeInput): Promise<string | n
     for (const t of stage.transcripts) {
       if (!t.content.trim()) continue;
       const who = t.label ? ` (${t.label})` : "";
-      blocks.push(`### Stage: ${stage.name}${who}\n${t.content.trim().slice(0, 6000)}`);
+      blocks.push(`### Stage: ${stage.name}${who}\n${t.content.trim().slice(0, 2800)}`);
     }
   }
   if (blocks.length === 0) return null;
@@ -65,7 +65,7 @@ TRANSCRIPTS:
 
 ${blocks.join("\n\n---\n\n")}`;
 
-  const text = await llmComplete({ system: "You analyze interview transcripts and reply with only a JSON object.", user: prompt, maxTokens: 2000, json: true });
+  const text = await llmComplete({ system: "You analyze interview transcripts and reply with only a JSON object.", user: prompt, maxTokens: 1600, json: true });
   if (!text) return null;
   const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   try {
