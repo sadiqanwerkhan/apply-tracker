@@ -84,7 +84,7 @@ export const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy,
               )}
               {stage.scheduledAt && (
                 <span className="shrink-0 rounded-full bg-success-muted px-2 py-0.5 text-[11px] font-medium text-success">
-                  {new Date(stage.scheduledAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                  {new Date(stage.scheduledAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" })}
                 </span>
               )}
             </div>
