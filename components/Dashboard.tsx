@@ -167,7 +167,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+                <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
                   <Link
                     href="/ask"
                     className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"

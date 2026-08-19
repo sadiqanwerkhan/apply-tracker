@@ -781,6 +781,21 @@ function Footer() {
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function ApplyTrackerLanding({ onSignIn }: { onSignIn?: () => Promise<void> }) {
+    // The signed-out landing page always uses its light design, regardless of any
+    // saved dark-theme preference from the signed-in app. The saved preference is
+    // restored when the user leaves this page (e.g. after signing in).
+    useEffect(() => {
+      const root = document.documentElement;
+      root.classList.remove("dark");
+      root.classList.add("light");
+      return () => {
+        if (localStorage.getItem("theme") === "dark") {
+          root.classList.add("dark");
+          root.classList.remove("light");
+        }
+      };
+    }, []);
+
     return (
       <main className="min-h-screen bg-background text-foreground">
         <Nav onSignIn={onSignIn} />
