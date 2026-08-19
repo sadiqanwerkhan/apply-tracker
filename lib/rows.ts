@@ -54,9 +54,15 @@ export async function buildRows(userId: string): Promise<Row[]> {
   // Staple the upcoming-interview details onto each row by its stable id.
   return rows.map((r) => {
     const ni = nextInterviewByApp.get(r.id);
+    const appHasStages = hasStagesByApp.has(r.id);
+    // A real interview stage means the candidate is progressing — reflect that as
+    // "Advancing" even if no email happened to be classified that way. A recorded
+    // rejection still wins (never override Rejected).
+    const status = appHasStages && r.status !== "Rejected" ? "Advancing" : r.status;
     return {
       ...r,
-      hasStages: hasStagesByApp.has(r.id),
+      status,
+      hasStages: appHasStages,
       nextInterviewAt: ni ? ni.at : null,
       nextInterviewName: ni ? ni.name : null,
       nextInterviewType: ni ? ni.type : null,
