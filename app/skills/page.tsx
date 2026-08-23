@@ -40,7 +40,7 @@ export default async function SkillsPage() {
       <div className="mx-auto max-w-2xl">
         <Link href="/" className="text-sm text-accent hover:underline">← Back to applications</Link>
 
-        <div className="mb-6 mt-4">
+        <div className="animate-fade-up mb-6 mt-4">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Your skills</h1>
           <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">
             {hasData
@@ -58,20 +58,20 @@ export default async function SkillsPage() {
           </div>
         ) : (
           <>
-            <div className="mb-5 flex flex-wrap gap-4 text-[13px] text-muted-foreground">
+            <div className="animate-fade-up mb-5 flex flex-wrap gap-4 text-[13px] text-muted-foreground" style={{ animationDelay: "30ms" }}>
               <span><span className="font-semibold text-foreground">{stats.length}</span> skills</span>
               <span><span className="font-semibold text-foreground">{learningPath.length}</span> to work on</span>
               <span><span className="font-semibold text-foreground">{totalSignals}</span> signals</span>
             </div>
 
             {frequency.length > 0 && (
-              <section className="mb-8">
+              <section className="animate-fade-up mb-8" style={{ animationDelay: "60ms" }}>
                 <SkillFrequency data={frequency} />
               </section>
             )}
 
             {learningPath.length > 0 && (
-              <section className="mb-8">
+              <section className="animate-fade-up mb-8" style={{ animationDelay: "120ms" }}>
                 <div className="mb-2.5 flex items-baseline justify-between">
                   <h2 className="text-[13px] font-semibold text-foreground">Study plan</h2>
                   <span className="text-[12px] text-muted-foreground">foundations first</span>
@@ -81,7 +81,7 @@ export default async function SkillsPage() {
             )}
 
             {strengths.length > 0 && (
-              <section>
+              <section className="animate-fade-up" style={{ animationDelay: "180ms" }}>
                 <h2 className="mb-2.5 text-[13px] font-semibold text-foreground">Strengths</h2>
                 <StrengthList stats={strengths} companies={companies} />
               </section>

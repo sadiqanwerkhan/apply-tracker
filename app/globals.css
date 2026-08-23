@@ -212,6 +212,14 @@
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: none; }
 }
+@keyframes bar-grow-x {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes skill-row-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
 
 @layer utilities {
   .animate-fade-up   { animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
@@ -221,13 +229,17 @@
     transform-origin: bottom;
     animation: sparkbar-grow 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+  .bar-grow { transform-origin: left; animation: bar-grow-x 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .skill-row { animation: skill-row-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-fade-in,
   .animate-row-expand,
-  .sparkbar {
+  .sparkbar,
+  .bar-grow,
+  .skill-row {
     animation: none !important;
   }
 }
