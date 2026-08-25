@@ -13,7 +13,6 @@ export const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy,
   const [scheduledLocal, setScheduledLocal] = useState(toLocalInput(stage.scheduledAt));
   const [addingT, setAddingT] = useState(false);
   const [tContent, setTContent] = useState("");
-  const [tLabel, setTLabel] = useState("");
 
   const [prep, setPrep] = useState<Prep | null>(null);
   const [prepping, setPrepping] = useState(false);
@@ -56,8 +55,8 @@ export const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy,
   }
   async function addTranscript() {
     if (!tContent.trim()) return;
-    await onCall("/api/transcript", "POST", { stageId: stage.id, content: tContent, label: tLabel || undefined });
-    setTContent(""); setTLabel(""); setAddingT(false);
+    await onCall("/api/transcript", "POST", { stageId: stage.id, content: tContent });
+    setTContent(""); setAddingT(false);
   }
 
   return (
@@ -127,17 +126,16 @@ export const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy,
 
       <div className="mt-3 space-y-2">
         {stage.transcripts.map((t) => (
-          <TranscriptItem key={t.id} transcript={t} busy={busy} onCall={onCall} />
+          <TranscriptItem key={t.id} transcript={t} stageName={stage.name} busy={busy} onCall={onCall} />
         ))}
       </div>
 
       {addingT ? (
         <div className="mt-3 border-t border-border pt-3">
-          <input value={tLabel} onChange={(e) => setTLabel(e.target.value)} placeholder="Label (optional, e.g. interviewer name)" className={`${fieldBase} mb-2 w-full`} />
           <textarea value={tContent} onChange={(e) => setTContent(e.target.value)} placeholder="Paste the interview transcript here…" rows={6} className={`${fieldBase} w-full`} autoFocus />
           <div className="mt-2 flex gap-2">
             <button onClick={addTranscript} disabled={busy} className={btnPrimary}>Save transcript</button>
-            <button onClick={() => { setAddingT(false); setTContent(""); setTLabel(""); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+            <button onClick={() => { setAddingT(false); setTContent(""); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
           </div>
         </div>
       ) : (
@@ -147,7 +145,7 @@ export const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy,
   );
 });
 
-const TranscriptItem = memo(function TranscriptItem({ transcript, busy, onCall }: { transcript: TranscriptT; busy: boolean; onCall: Caller }) {
+const TranscriptItem = memo(function TranscriptItem({ transcript, stageName, busy, onCall }: { transcript: TranscriptT; stageName: string; busy: boolean; onCall: Caller }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(transcript.content);
@@ -185,7 +183,7 @@ const TranscriptItem = memo(function TranscriptItem({ transcript, busy, onCall }
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>
           </span>
           <div className="min-w-0">
-            <span className="block break-words text-sm font-medium text-foreground">{transcript.label || "Transcript"}</span>
+            <span className="block break-words text-sm font-medium text-foreground">{transcript.label || stageName || "Transcript"}</span>
             {expanded ? (
               <pre className="mt-2 max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm text-muted-foreground">{transcript.content}</pre>
             ) : (
