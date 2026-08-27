@@ -54,10 +54,20 @@ function keywordStage(subject: string, body: string): Stage {
   return "applied";
 }
 
-/** Hash of exactly what the classifier sees, so a cache hit is a true match. */
+/**
+ * Hash of exactly what the classifier sees, PLUS which engine produced it, so a
+ * cache hit is a true match for the current model. Including the engine means a
+ * Groq result and a Claude result for the same email are cached separately —
+ * switching CLASSIFY_ENGINE never serves the other model's (possibly wrong)
+ * cached answer. This is what prevents stale weak-model classifications from
+ * surviving an engine switch.
+ */
+function classifyEngineName(): string {
+  return (process.env.CLASSIFY_ENGINE || "groq").toLowerCase();
+}
 function contentHash(subject: string, body: string): string {
   const b = body.length > BODY_LIMIT ? body.slice(0, BODY_LIMIT) : body;
-  return crypto.createHash("sha256").update(subject + "\u0000" + b).digest("hex");
+  return crypto.createHash("sha256").update(classifyEngineName() + "\u0000" + subject + "\u0000" + b).digest("hex");
 }
 
 type Parsed = {
