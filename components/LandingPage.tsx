@@ -725,10 +725,10 @@ function CtaBanner({ onSignIn }: { onSignIn?: () => Promise<void> }) {
 }
 
 function Footer() {
-  const columns: { title: string; links: string[] }[] = [
-    { title: 'Product', links: ['Features', 'How it works', 'Pricing', 'Export'] },
-    { title: 'Company', links: ['About', 'Blog', 'Careers', 'Contact'] },
-    { title: 'Legal', links: ['Privacy policy', 'Terms of service', 'Security'] },
+  const columns: { title: string; links: { label: string; href: string }[] }[] = [
+    { title: 'Product', links: [{ label: 'Features', href: '#' }, { label: 'How it works', href: '#' }, { label: 'Pricing', href: '#' }, { label: 'Export', href: '#' }] },
+    { title: 'Company', links: [{ label: 'About', href: '#' }, { label: 'Blog', href: '#' }, { label: 'Careers', href: '#' }, { label: 'Contact', href: '#' }] },
+    { title: 'Legal', links: [{ label: 'Privacy policy', href: '/privacy' }, { label: 'Terms of service', href: '#' }, { label: 'Security', href: '#' }] },
   ]
   return (
     <footer className="border-t border-border bg-card">
@@ -755,12 +755,12 @@ function Footer() {
               <h3 className="text-sm font-semibold">{col.title}</h3>
               <ul className="mt-4 space-y-3">
                 {col.links.map((link) => (
-                  <li key={link}>
+                  <li key={link.label}>
                     <a
-                      href="#"
+                      href={link.href}
                       className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                     >
-                      {link}
+                      {link.label}
                     </a>
                   </li>
                 ))}
