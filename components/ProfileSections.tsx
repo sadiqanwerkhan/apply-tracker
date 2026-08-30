@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
+import LocationSelect from "@/components/LocationSelect";
+import { LANGUAGES } from "@/lib/data/languages";
 
 type Section = "work" | "education" | "language" | "certification";
 type Item = Record<string, unknown> & { id: string };
@@ -121,11 +123,11 @@ function WorkForm({ initial, onDone, onCancel }: { initial?: Item; onDone: () =>
           {WORK_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
         <input value={f.country} onChange={(e) => set("country", e.target.value)} placeholder="Country (optional)" className={fieldBase} />
-        <input value={f.city} onChange={(e) => set("city", e.target.value)} placeholder="City (optional)" className={fieldBase} />
+        <LocationSelect value={f.city} onChange={(v) => set("city", v)} placeholder="City (optional)" />
         <div />
-        <input value={f.startDate} onChange={(e) => set("startDate", e.target.value)} placeholder="Start (YYYY-MM)" className={fieldBase} />
+        <input type="month" value={f.startDate} onChange={(e) => set("startDate", e.target.value)} className={fieldBase} />
         <div className="flex items-center gap-2">
-          <input value={f.endDate} onChange={(e) => set("endDate", e.target.value)} placeholder="End (YYYY-MM)" disabled={f.current} className={`${fieldBase} flex-1 ${f.current ? "opacity-50" : ""}`} />
+          <input type="month" value={f.endDate} onChange={(e) => set("endDate", e.target.value)} disabled={f.current} className={`${fieldBase} flex-1 ${f.current ? "opacity-50" : ""}`} />
           <label className="flex shrink-0 items-center gap-1.5 text-[12px] text-muted-foreground">
             <input type="checkbox" checked={f.current} onChange={(e) => set("current", e.target.checked)} className="accent-accent" /> Current
           </label>
@@ -188,10 +190,10 @@ function EduForm({ initial, onDone, onCancel }: { initial?: Item; onDone: () => 
         <input value={f.degree} onChange={(e) => set("degree", e.target.value)} placeholder="Degree / qualification" className={fieldBase} />
         <input value={f.institution} onChange={(e) => set("institution", e.target.value)} placeholder="Institution" className={fieldBase} />
         <input value={f.country} onChange={(e) => set("country", e.target.value)} placeholder="Country (optional)" className={fieldBase} />
-        <input value={f.city} onChange={(e) => set("city", e.target.value)} placeholder="City (optional)" className={fieldBase} />
-        <input value={f.startDate} onChange={(e) => set("startDate", e.target.value)} placeholder="Start (YYYY)" className={fieldBase} />
+        <LocationSelect value={f.city} onChange={(v) => set("city", v)} placeholder="City (optional)" />
+        <input type="month" value={f.startDate} onChange={(e) => set("startDate", e.target.value)} className={fieldBase} />
         <div className="flex items-center gap-2">
-          <input value={f.endDate} onChange={(e) => set("endDate", e.target.value)} placeholder="End (YYYY)" disabled={f.current} className={`${fieldBase} flex-1 ${f.current ? "opacity-50" : ""}`} />
+          <input type="month" value={f.endDate} onChange={(e) => set("endDate", e.target.value)} disabled={f.current} className={`${fieldBase} flex-1 ${f.current ? "opacity-50" : ""}`} />
           <label className="flex shrink-0 items-center gap-1.5 text-[12px] text-muted-foreground">
             <input type="checkbox" checked={f.current} onChange={(e) => set("current", e.target.checked)} className="accent-accent" /> Current
           </label>
@@ -206,18 +208,37 @@ function EduForm({ initial, onDone, onCancel }: { initial?: Item; onDone: () => 
 }
 
 // ── Languages ────────────────────────────────────────────────────────────────
+function flagFor(name: string): string {
+  return LANGUAGES.find((l) => l.name.toLowerCase() === name.toLowerCase())?.flag || "";
+}
 export function LanguageSection() {
   const { items, loading, reload } = useSection("language");
   const [name, setName] = useState("");
   const [level, setLevel] = useState("B2");
   const [busy, setBusy] = useState(false);
-  async function add() { if (!name.trim()) return; setBusy(true); await save("language", { name, level }); setName(""); setBusy(false); reload(); }
+  const [open, setOpen] = useState(false);
+
+  // Language suggestions filtered by what's typed (small bundled list, no API).
+  const suggestions = name.trim()
+    ? LANGUAGES.filter((l) => l.name.toLowerCase().includes(name.trim().toLowerCase())).slice(0, 6)
+    : [];
+
+  async function add(langName?: string) {
+    const value = (langName ?? name).trim();
+    if (!value) return;
+    setBusy(true);
+    await save("language", { name: value, level });
+    setName(""); setOpen(false); setBusy(false);
+    reload();
+  }
+
   return (
     <SectionShell title="Spoken languages" subtitle="Languages you speak and your level (CEFR, or Native).">
       {loading ? null : (
         <div className="flex flex-wrap gap-2">
           {items.map((it) => (
             <span key={it.id} className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/50 py-1 pl-3 pr-2 text-[13px]">
+              {flagFor(String(it.name)) && <span aria-hidden>{flagFor(String(it.name))}</span>}
               <span className="text-foreground">{String(it.name)}</span>
               <span className="text-muted-foreground">{String(it.level)}</span>
               <button onClick={() => remove("language", it.id).then(reload)} className="text-muted-foreground hover:text-danger" aria-label="Remove">×</button>
@@ -226,11 +247,30 @@ export function LanguageSection() {
         </div>
       )}
       <div className="flex flex-col gap-2 sm:flex-row">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Language (e.g. German)" className={`${fieldBase} flex-1`} onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
+        <div className="relative flex-1">
+          <input
+            value={name}
+            onChange={(e) => { setName(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            placeholder="Language (e.g. German)"
+            className={`${fieldBase} w-full`}
+            onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+          />
+          {open && suggestions.length > 0 && (
+            <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover shadow-lg" onMouseDown={(e) => e.preventDefault()}>
+              {suggestions.map((l) => (
+                <li key={l.name} onClick={() => { setName(l.name); setOpen(false); }} className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent/10">
+                  <span aria-hidden>{l.flag}</span> {l.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <select value={level} onChange={(e) => setLevel(e.target.value)} className={fieldBase}>
           {LANG_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
-        <button onClick={add} disabled={busy || !name.trim()} className={btnPrimary}>Add</button>
+        <button onClick={() => add()} disabled={busy || !name.trim()} className={btnPrimary}>Add</button>
       </div>
     </SectionShell>
   );
@@ -255,11 +295,13 @@ export function CertificationSection() {
           <button onClick={() => remove("certification", it.id).then(reload)} className="shrink-0 text-[12px] text-muted-foreground hover:text-danger">Delete</button>
         </div>
       ))}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_1fr_0.6fr_auto]">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Certification name" className={fieldBase} />
         <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuer (optional)" className={fieldBase} />
-        <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="Year" className={fieldBase} />
-        <button onClick={add} disabled={busy || !name.trim()} className={btnPrimary}>Add</button>
+        <input type="number" min={1950} max={2100} value={year} onChange={(e) => setYear(e.target.value)} placeholder="Year" className={`${fieldBase} w-full sm:w-32`} />
+        <div className="flex items-end sm:justify-start">
+          <button onClick={add} disabled={busy || !name.trim()} className={btnPrimary}>Add certification</button>
+        </div>
       </div>
     </SectionShell>
   );
