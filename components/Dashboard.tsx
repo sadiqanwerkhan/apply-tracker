@@ -137,6 +137,9 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             <Link href="/skills" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
               Skills
             </Link>
+            <Link href="/profile" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
+              Profile
+            </Link>
             <Link href="/settings" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
               Settings
             </Link>
@@ -182,6 +185,12 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
                     Skills
                   </Link>
                   <div className="border-t border-border" />
+                  <Link
+                    href="/profile"
+                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                  >
+                    Profile
+                  </Link>
                   <Link
                     href="/settings"
                     className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"

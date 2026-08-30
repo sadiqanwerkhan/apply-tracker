@@ -43,6 +43,7 @@ model User {
   emails        Email[]
   chatMessages  ChatMessage[]
   mcpTokens     McpToken[]
+  profile       Profile?
 }
 
 model Account {
@@ -275,4 +276,21 @@ model McpToken {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// The user's personal profile — the honest "root" record of who they are. This
+/// is the foundation; work experience, education, skills, etc. attach to the
+/// user alongside it. One profile per user.
+model Profile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  firstName    String?
+  lastName     String?
+  contactEmail String?  // optional alternate email; login email is used if blank
+  age          Int?
+  phone        String?
+  location     String?  // free text, e.g. "Berlin, Germany" or "Remote"
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
