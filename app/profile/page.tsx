@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signIn } from "@/auth";
 import LandingPage from "@/components/LandingPage";
 import { ProfileForm } from "@/components/ProfileForm";
+import { WorkSection, EducationSection, LanguageSection, CertificationSection } from "@/components/ProfileSections";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -23,7 +24,13 @@ export default async function ProfilePage() {
             The honest record of who you are — used to tailor applications and spot gaps against roles.
           </p>
         </div>
-        <ProfileForm />
+        <div className="space-y-5">
+          <ProfileForm />
+          <WorkSection />
+          <EducationSection />
+          <LanguageSection />
+          <CertificationSection />
+        </div>
       </div>
     </main>
   );
