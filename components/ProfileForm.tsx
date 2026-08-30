@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fieldBase, btnPrimary } from "./application-detail/shared";
+import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
 
 type Profile = {
   firstName: string | null;

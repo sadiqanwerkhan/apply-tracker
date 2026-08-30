@@ -44,6 +44,10 @@ model User {
   chatMessages  ChatMessage[]
   mcpTokens     McpToken[]
   profile       Profile?
+  workExperiences WorkExperience[]
+  education     Education[]
+  languages     Language[]
+  certifications Certification[]
 }
 
 model Account {
@@ -293,4 +297,72 @@ model Profile {
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A single job in the user's work history. Location is split so people can
+/// reveal as much or as little as they want: workMode (on-site/hybrid/remote),
+/// plus optional country and city. Display shows whatever is filled.
+model WorkExperience {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  company     String
+  workMode    String    @default("onsite") // "onsite" | "hybrid" | "remote"
+  country     String?
+  city        String?
+  startDate   String?   // stored as "YYYY-MM" free text (month precision is enough)
+  endDate     String?   // blank/"present" means current
+  current     Boolean   @default(false)
+  description String?    // what they actually did — used later for gap analysis
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A degree or educational qualification.
+model Education {
+  id          String   @id @default(cuid())
+  userId      String
+  degree      String   // e.g. "MSc Data Analytics"
+  institution String
+  country     String?
+  city        String?
+  startDate   String?
+  endDate     String?
+  current     Boolean  @default(false)
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A spoken language and the user's proficiency level.
+model Language {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   // e.g. "German"
+  level     String   // "A1".."C2" | "Native"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A professional certification.
+model Certification {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  issuer    String?
+  year      String?  // "YYYY"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
