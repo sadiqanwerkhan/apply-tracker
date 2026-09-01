@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
-import LocationSelect from "@/components/LocationSelect";
+import { CountryCitySelect } from "@/components/CountryCitySelect";
 import { LANGUAGES } from "@/lib/data/languages";
 
 type Section = "work" | "education" | "language" | "certification";
@@ -122,8 +122,7 @@ function WorkForm({ initial, onDone, onCancel }: { initial?: Item; onDone: () =>
         <select value={f.workMode} onChange={(e) => set("workMode", e.target.value)} className={fieldBase}>
           {WORK_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
-        <input value={f.country} onChange={(e) => set("country", e.target.value)} placeholder="Country (optional)" className={fieldBase} />
-        <LocationSelect value={f.city} onChange={(v) => set("city", v)} placeholder="City (optional)" />
+        <CountryCitySelect country={f.country} city={f.city} onCountry={(v) => set("country", v)} onCity={(v) => set("city", v)} />
         <div />
         <input type="month" value={f.startDate} onChange={(e) => set("startDate", e.target.value)} className={fieldBase} />
         <div className="flex items-center gap-2">
@@ -189,8 +188,7 @@ function EduForm({ initial, onDone, onCancel }: { initial?: Item; onDone: () => 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input value={f.degree} onChange={(e) => set("degree", e.target.value)} placeholder="Degree / qualification" className={fieldBase} />
         <input value={f.institution} onChange={(e) => set("institution", e.target.value)} placeholder="Institution" className={fieldBase} />
-        <input value={f.country} onChange={(e) => set("country", e.target.value)} placeholder="Country (optional)" className={fieldBase} />
-        <LocationSelect value={f.city} onChange={(v) => set("city", v)} placeholder="City (optional)" />
+        <CountryCitySelect country={f.country} city={f.city} onCountry={(v) => set("country", v)} onCity={(v) => set("city", v)} />
         <input type="month" value={f.startDate} onChange={(e) => set("startDate", e.target.value)} className={fieldBase} />
         <div className="flex items-center gap-2">
           <input type="month" value={f.endDate} onChange={(e) => set("endDate", e.target.value)} disabled={f.current} className={`${fieldBase} flex-1 ${f.current ? "opacity-50" : ""}`} />
@@ -217,6 +215,7 @@ export function LanguageSection() {
   const [level, setLevel] = useState("B2");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   // Language suggestions filtered by what's typed (small bundled list, no API).
   const suggestions = name.trim()
@@ -228,7 +227,7 @@ export function LanguageSection() {
     if (!value) return;
     setBusy(true);
     await save("language", { name: value, level });
-    setName(""); setOpen(false); setBusy(false);
+    setName(""); setOpen(false); setBusy(false); setAdding(false);
     reload();
   }
 
@@ -246,32 +245,38 @@ export function LanguageSection() {
           ))}
         </div>
       )}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <input
-            value={name}
-            onChange={(e) => { setName(e.target.value); setOpen(true); }}
-            onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 150)}
-            placeholder="Language (e.g. German)"
-            className={`${fieldBase} w-full`}
-            onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-          />
-          {open && suggestions.length > 0 && (
-            <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover shadow-lg" onMouseDown={(e) => e.preventDefault()}>
-              {suggestions.map((l) => (
-                <li key={l.name} onClick={() => { setName(l.name); setOpen(false); }} className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent/10">
-                  <span aria-hidden>{l.flag}</span> {l.name}
-                </li>
-              ))}
-            </ul>
-          )}
+      {adding ? (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <input
+              value={name}
+              onChange={(e) => { setName(e.target.value); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
+              placeholder="Language (e.g. German)"
+              className={`${fieldBase} w-full`}
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+            />
+            {open && suggestions.length > 0 && (
+              <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover shadow-lg" onMouseDown={(e) => e.preventDefault()}>
+                {suggestions.map((l) => (
+                  <li key={l.name} onClick={() => { setName(l.name); setOpen(false); }} className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent/10">
+                    <span aria-hidden>{l.flag}</span> {l.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <select value={level} onChange={(e) => setLevel(e.target.value)} className={fieldBase}>
+            {LANG_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+          <button onClick={() => add()} disabled={busy || !name.trim()} className={btnPrimary}>Add</button>
+          <button onClick={() => { setAdding(false); setName(""); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
         </div>
-        <select value={level} onChange={(e) => setLevel(e.target.value)} className={fieldBase}>
-          {LANG_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-        </select>
-        <button onClick={() => add()} disabled={busy || !name.trim()} className={btnPrimary}>Add</button>
-      </div>
+      ) : (
+        <button onClick={() => setAdding(true)} className="text-sm font-medium text-accent hover:underline">+ Add language</button>
+      )}
     </SectionShell>
   );
 }
@@ -283,7 +288,8 @@ export function CertificationSection() {
   const [issuer, setIssuer] = useState("");
   const [year, setYear] = useState("");
   const [busy, setBusy] = useState(false);
-  async function add() { if (!name.trim()) return; setBusy(true); await save("certification", { name, issuer, year }); setName(""); setIssuer(""); setYear(""); setBusy(false); reload(); }
+  const [adding, setAdding] = useState(false);
+  async function add() { if (!name.trim()) return; setBusy(true); await save("certification", { name, issuer, year }); setName(""); setIssuer(""); setYear(""); setBusy(false); setAdding(false); reload(); }
   return (
     <SectionShell title="Certifications" subtitle="Professional certifications, if any.">
       {loading ? null : items.map((it) => (
@@ -295,14 +301,19 @@ export function CertificationSection() {
           <button onClick={() => remove("certification", it.id).then(reload)} className="shrink-0 text-[12px] text-muted-foreground hover:text-danger">Delete</button>
         </div>
       ))}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Certification name" className={fieldBase} />
-        <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuer (optional)" className={fieldBase} />
-        <input type="number" min={1950} max={2100} value={year} onChange={(e) => setYear(e.target.value)} placeholder="Year" className={`${fieldBase} w-full sm:w-32`} />
-        <div className="flex items-end sm:justify-start">
-          <button onClick={add} disabled={busy || !name.trim()} className={btnPrimary}>Add certification</button>
+      {adding ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Certification name" className={fieldBase} autoFocus />
+          <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuer (optional)" className={fieldBase} />
+          <input type="number" min={1950} max={2100} value={year} onChange={(e) => setYear(e.target.value)} placeholder="Year" className={`${fieldBase} w-full sm:w-32`} />
+          <div className="flex items-end gap-2 sm:justify-start">
+            <button onClick={add} disabled={busy || !name.trim()} className={btnPrimary}>Add certification</button>
+            <button onClick={() => { setAdding(false); setName(""); setIssuer(""); setYear(""); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <button onClick={() => setAdding(true)} className="text-sm font-medium text-accent hover:underline">+ Add certification</button>
+      )}
     </SectionShell>
   );
 }
