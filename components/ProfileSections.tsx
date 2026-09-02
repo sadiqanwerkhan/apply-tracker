@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
 import { CountryCitySelect } from "@/components/CountryCitySelect";
+import { SearchableSelect } from "@/components/SearchableSelect";
+import { DEGREE_TYPES, MAJORS } from "@/lib/data/education";
 import { LANGUAGES } from "@/lib/data/languages";
 
 type Section = "work" | "education" | "language" | "certification";
@@ -154,7 +156,7 @@ export function EducationSection() {
             <div key={it.id} className="rounded-lg border border-border/60 p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-medium text-foreground">{String(it.degree)}</p>
+                  <p className="font-medium text-foreground">{String(it.degree)}{it.major ? ` — ${String(it.major)}` : ""}</p>
                   <p className="text-[13px] text-muted-foreground">{String(it.institution)}{locationText(it) ? ` · ${locationText(it)}` : ""}</p>
                   {dateRange(it) && <p className="text-[12px] text-muted-foreground/80">{dateRange(it)}</p>}
                 </div>
@@ -175,7 +177,7 @@ export function EducationSection() {
 
 function EduForm({ initial, onDone, onCancel }: { initial?: Item; onDone: () => void; onCancel: () => void }) {
   const [f, setF] = useState({
-    degree: (initial?.degree as string) || "", institution: (initial?.institution as string) || "",
+    degree: (initial?.degree as string) || "", major: (initial?.major as string) || "", institution: (initial?.institution as string) || "",
     country: (initial?.country as string) || "", city: (initial?.city as string) || "",
     startDate: (initial?.startDate as string) || "", endDate: (initial?.endDate as string) || "",
     current: (initial?.current as boolean) || false,
@@ -186,8 +188,10 @@ function EduForm({ initial, onDone, onCancel }: { initial?: Item; onDone: () => 
   return (
     <div className="rounded-lg border border-accent/30 bg-accent/[0.04] p-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <input value={f.degree} onChange={(e) => set("degree", e.target.value)} placeholder="Degree / qualification" className={fieldBase} />
+        <SearchableSelect value={f.degree} onChange={(v) => set("degree", v)} options={DEGREE_TYPES} placeholder="Degree type" />
+        <SearchableSelect value={f.major} onChange={(v) => set("major", v)} options={MAJORS} placeholder="Major / field of study" />
         <input value={f.institution} onChange={(e) => set("institution", e.target.value)} placeholder="Institution" className={fieldBase} />
+        <div />
         <CountryCitySelect country={f.country} city={f.city} onCountry={(v) => set("country", v)} onCity={(v) => set("city", v)} />
         <input type="month" value={f.startDate} onChange={(e) => set("startDate", e.target.value)} className={fieldBase} />
         <div className="flex items-center gap-2">

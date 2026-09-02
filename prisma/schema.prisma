@@ -325,7 +325,8 @@ model WorkExperience {
 model Education {
   id          String   @id @default(cuid())
   userId      String
-  degree      String   // e.g. "MSc Data Analytics"
+  degree      String   // degree type, e.g. "Master of Science"
+  major       String?  // field of study, e.g. "Computer Science"
   institution String
   country     String?
   city        String?
