@@ -23,7 +23,7 @@ function clean(section: Section, body: Record<string, unknown>) {
       };
     case "education":
       return {
-        degree: s(body.degree) ?? "", institution: s(body.institution) ?? "",
+        degree: s(body.degree) ?? "", major: s(body.major), institution: s(body.institution) ?? "",
         country: s(body.country), city: s(body.city),
         startDate: s(body.startDate, 20), endDate: s(body.endDate, 20),
         current: bool(body.current), description: s(body.description, 4000),

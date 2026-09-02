@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { fieldBase } from "@/components/application-detail/shared";
 
-// A linked country + city picker. Country autocompletes from /api/countries.
-// City autocompletes from /api/cities — and when a country is chosen, only that
-// country's cities are suggested (bare names). Free typing is always allowed, so
-// nothing is blocked if a place isn't in the dataset.
+// A linked country + city picker.
+// - Country autocompletes from /api/countries.
+// - City autocompletes from /api/cities; when a country is chosen, only that
+//   country's cities are suggested (bare names).
+// - When no country is set and the user picks a "City, Country" suggestion, it is
+//   split so the city field holds just the city and the country field is filled.
+// - An always-available "Other" lets the user type a city not in the list.
 export function CountryCitySelect({
   country, city, onCountry, onCity,
 }: {
@@ -15,42 +18,13 @@ export function CountryCitySelect({
 }) {
   return (
     <>
-      <AutocompleteInput
-        value={country}
-        onChange={onCountry}
-        placeholder="Country (optional)"
-        fetchOptions={async (q) => {
-          const res = await fetch(`/api/countries?q=${encodeURIComponent(q)}`);
-          const d = await res.json();
-          return Array.isArray(d.countries) ? d.countries : [];
-        }}
-      />
-      <AutocompleteInput
-        value={city}
-        onChange={onCity}
-        placeholder="City (optional)"
-        // Re-fetch whenever the country changes so suggestions stay in sync.
-        dep={country}
-        fetchOptions={async (q) => {
-          const params = new URLSearchParams();
-          if (q) params.set("q", q);
-          if (country.trim()) params.set("country", country.trim());
-          // Without a country and <2 chars, the endpoint returns nothing — that's fine.
-          const res = await fetch(`/api/cities?${params.toString()}`);
-          const d = await res.json();
-          return Array.isArray(d.cities) ? d.cities : [];
-        }}
-      />
+      <CountryInput value={country} onChange={onCountry} />
+      <CityInput country={country} city={city} onCity={onCity} onCountry={onCountry} />
     </>
   );
 }
 
-function AutocompleteInput({
-  value, onChange, placeholder, fetchOptions, dep,
-}: {
-  value: string; onChange: (v: string) => void; placeholder: string;
-  fetchOptions: (q: string) => Promise<string[]>; dep?: string;
-}) {
+function CountryInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
@@ -60,11 +34,14 @@ function AutocompleteInput({
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(async () => {
-      try { setResults(await fetchOptions(query.trim())); } catch { setResults([]); }
+      try {
+        const res = await fetch(`/api/countries?q=${encodeURIComponent(query.trim())}`);
+        const d = await res.json();
+        setResults(Array.isArray(d.countries) ? d.countries : []);
+      } catch { setResults([]); }
     }, 150);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, open, dep]);
+  }, [query, open]);
 
   function pick(v: string) { onChange(v); setQuery(""); setOpen(false); }
 
@@ -73,7 +50,7 @@ function AutocompleteInput({
       <input
         type="text"
         value={open ? query : value}
-        placeholder={placeholder}
+        placeholder="Country (optional)"
         onFocus={() => { setQuery(value); setActive(0); setOpen(true); }}
         onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); setActive(0); setOpen(true); }}
         onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 150); }}
@@ -95,6 +72,87 @@ function AutocompleteInput({
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function CityInput({
+  country, city, onCity, onCountry,
+}: {
+  country: string; city: string;
+  onCity: (v: string) => void; onCountry: (v: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const [freeText, setFreeText] = useState(false);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (query.trim()) params.set("q", query.trim());
+        if (country.trim()) params.set("country", country.trim());
+        const res = await fetch(`/api/cities?${params.toString()}`);
+        const d = await res.json();
+        setResults(Array.isArray(d.cities) ? d.cities : []);
+      } catch { setResults([]); }
+    }, 150);
+    return () => clearTimeout(t);
+  }, [query, open, country]);
+
+  // Picking a suggestion. If it's "City, Country" (no country chosen yet), split
+  // it: city field gets the city, country field gets the country.
+  function pick(v: string) {
+    const commaIdx = v.lastIndexOf(", ");
+    if (!country.trim() && commaIdx > -1) {
+      onCity(v.slice(0, commaIdx));
+      onCountry(v.slice(commaIdx + 2));
+    } else {
+      onCity(v);
+    }
+    setQuery(""); setOpen(false);
+  }
+
+  if (freeText) {
+    return (
+      <div className="relative">
+        <input value={city} onChange={(e) => onCity(e.target.value)} placeholder="City (type it in)" className={`${fieldBase} w-full`} autoFocus />
+        <button type="button" onClick={() => { setFreeText(false); onCity(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground hover:text-accent">↩ list</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={open ? query : city}
+        placeholder="City (optional)"
+        onFocus={() => { setQuery(city); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); onCity(e.target.value); setOpen(true); }}
+        onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 150); }}
+        className={`${fieldBase} w-full`}
+      />
+      {open && (
+        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-lg" onMouseDown={(e) => e.preventDefault()}>
+          <ul className="max-h-52 overflow-auto">
+            {results.map((opt) => (
+              <li key={opt} onClick={() => pick(opt)} className="cursor-pointer px-3 py-2 text-sm text-foreground hover:bg-accent/10">{opt}</li>
+            ))}
+            {results.length === 0 && (
+              <li className="px-3 py-2 text-sm text-muted-foreground">No match — use “Other” below</li>
+            )}
+          </ul>
+          {/* Pinned "Other" for cities not in the list. */}
+          <button type="button" onClick={() => { setFreeText(true); onCity(""); setOpen(false); }}
+            className="block w-full border-t border-border bg-secondary/40 px-3 py-2 text-left text-sm font-medium text-accent hover:bg-secondary">
+            + Other (type your own)
+          </button>
+        </div>
       )}
     </div>
   );
