@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
+import { CountryCitySelect } from "@/components/CountryCitySelect";
+import { DIAL_CODES } from "@/lib/data/dialCodes";
 
 type Profile = {
   firstName: string | null;
@@ -12,21 +14,34 @@ type Profile = {
   location: string | null;
 };
 
-// Piece 1 of the profile: personal info. The login email is auto-filled and
-// read-only; the user can optionally add an alternate contact email. This is the
-// honest "root" record — later sections (work, education, skills) build on it.
+// Split a stored "City, Country" location back into parts for the pickers.
+function splitLocation(loc: string): { city: string; country: string } {
+  const i = loc.lastIndexOf(", ");
+  if (i > -1) return { city: loc.slice(0, i), country: loc.slice(i + 2) };
+  return { city: loc, country: "" };
+}
+// Split a stored "+49 1766…" phone into code + number.
+function splitPhone(phone: string): { code: string; number: string } {
+  const match = DIAL_CODES.map((d) => d.code).sort((a, b) => b.length - a.length).find((c) => phone.startsWith(c));
+  if (match) return { code: match, number: phone.slice(match.length).trim() };
+  return { code: "+49", number: phone };
+}
+
 export function ProfileForm() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [age, setAge] = useState("");
-  const [phone, setPhone] = useState("");
-  const [location, setLocation] = useState("");
+  const [phoneCode, setPhoneCode] = useState("+49");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
 
   useEffect(() => {
     fetch("/api/profile")
@@ -39,35 +54,46 @@ export function ProfileForm() {
           setLastName(p.lastName || "");
           setContactEmail(p.contactEmail || "");
           setAge(p.age != null ? String(p.age) : "");
-          setPhone(p.phone || "");
-          setLocation(p.location || "");
+          if (p.phone) { const s = splitPhone(p.phone); setPhoneCode(s.code); setPhoneNumber(s.number); }
+          if (p.location) { const s = splitLocation(p.location); setCountry(s.country); setCity(s.city); }
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  function validate(): boolean {
+    const e: Record<string, string> = {};
+    if (!firstName.trim()) e.firstName = "First name is required";
+    if (!lastName.trim()) e.lastName = "Last name is required";
+    // Location required: at least a country or city must be provided.
+    if (!country.trim() && !city.trim()) e.location = "Current location is required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
   async function save() {
+    if (!validate()) return;
     setSaving(true);
     setSaved(false);
+    // Combine the parts back into the fields the API stores.
+    const location = [city.trim(), country.trim()].filter(Boolean).join(", ");
+    const phone = phoneNumber.trim() ? `${phoneCode} ${phoneNumber.trim()}` : "";
     try {
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ firstName, lastName, contactEmail, age, phone, location }),
       });
-      if (res.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
-      }
+      if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
-  }
+  if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  const errClass = (k: string) => (errors[k] ? " border-danger focus:border-danger focus:ring-danger/15" : "");
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
@@ -78,12 +104,14 @@ export function ProfileForm() {
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-foreground/80">First name</span>
-          <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={fieldBase} placeholder="Jane" />
+          <span className="text-[13px] font-medium text-foreground/80">First name <span className="text-danger">*</span></span>
+          <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={`${fieldBase}${errClass("firstName")}`} placeholder="Jane" />
+          {errors.firstName && <span className="text-[11px] text-danger">{errors.firstName}</span>}
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-foreground/80">Last name</span>
-          <input value={lastName} onChange={(e) => setLastName(e.target.value)} className={fieldBase} placeholder="Doe" />
+          <span className="text-[13px] font-medium text-foreground/80">Last name <span className="text-danger">*</span></span>
+          <input value={lastName} onChange={(e) => setLastName(e.target.value)} className={`${fieldBase}${errClass("lastName")}`} placeholder="Doe" />
+          {errors.lastName && <span className="text-[11px] text-danger">{errors.lastName}</span>}
         </label>
 
         <label className="flex flex-col gap-1.5 sm:col-span-2">
@@ -101,15 +129,25 @@ export function ProfileForm() {
           <span className="text-[13px] font-medium text-foreground/80">Age <span className="font-normal text-muted-foreground">(optional)</span></span>
           <input type="number" min={14} max={100} value={age} onChange={(e) => setAge(e.target.value)} className={fieldBase} placeholder="28" />
         </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-foreground/80">Phone <span className="font-normal text-muted-foreground">(optional)</span></span>
-          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={fieldBase} placeholder="+49 …" />
-        </label>
 
-        <label className="flex flex-col gap-1.5 sm:col-span-2">
-          <span className="text-[13px] font-medium text-foreground/80">Current location</span>
-          <input value={location} onChange={(e) => setLocation(e.target.value)} className={fieldBase} placeholder="Berlin, Germany" />
-        </label>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-medium text-foreground/80">Phone <span className="font-normal text-muted-foreground">(optional)</span></span>
+          <div className="flex gap-2">
+            <select value={phoneCode} onChange={(e) => setPhoneCode(e.target.value)} className={`${fieldBase} shrink-0`}>
+              {DIAL_CODES.map((d) => <option key={d.country} value={d.code}>{d.flag} {d.code}</option>)}
+            </select>
+            <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d ]/g, ""))} className={`${fieldBase} flex-1`} placeholder="17662842394" />
+          </div>
+          <span className="text-[11px] text-muted-foreground">Just the number — no leading 0 or country code.</span>
+        </div>
+
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <span className="text-[13px] font-medium text-foreground/80">Current location <span className="text-danger">*</span></span>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <CountryCitySelect country={country} city={city} onCountry={setCountry} onCity={setCity} />
+          </div>
+          {errors.location && <span className="text-[11px] text-danger">{errors.location}</span>}
+        </div>
       </div>
 
       <div className="mt-6 flex items-center gap-3">
