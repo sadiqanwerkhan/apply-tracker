@@ -4,6 +4,7 @@ import LandingPage from "@/components/LandingPage";
 import { ProfileForm } from "@/components/ProfileForm";
 import { WorkSection, EducationSection, LanguageSection, CertificationSection } from "@/components/ProfileSections";
 import { SkillClassifier } from "@/components/SkillClassifier";
+import { ProfileExport } from "@/components/ProfileExport";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -32,6 +33,7 @@ export default async function ProfilePage() {
           <LanguageSection />
           <CertificationSection />
           <SkillClassifier />
+          <ProfileExport />
         </div>
       </div>
     </main>
