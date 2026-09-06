@@ -63,12 +63,29 @@ async function remove(section: Section, id: string) {
   });
 }
 
-function SectionShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function SectionShell({ title, subtitle, children, count }: { title: string; subtitle?: string; children: React.ReactNode; count?: number }) {
+  const [open, setOpen] = useState(true);
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      {subtitle && <p className="mt-1 text-[13px] text-muted-foreground">{subtitle}</p>}
-      <div className="mt-4 space-y-3">{children}</div>
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 p-4 text-left sm:p-6"
+      >
+        <span className="flex items-center gap-2">
+          <span className="text-base font-semibold text-foreground">{title}</span>
+          {typeof count === "number" && count > 0 && (
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">{count}</span>
+          )}
+        </span>
+        <svg className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+          {subtitle && <p className="-mt-1 mb-4 text-[13px] text-muted-foreground">{subtitle}</p>}
+          <div className="space-y-3">{children}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -78,7 +95,7 @@ export function WorkSection() {
   const { items, loading, reload } = useSection("work");
   const [editing, setEditing] = useState<string | "new" | null>(null);
   return (
-    <SectionShell title="Work experience" subtitle="The real roles you've held. Add what you actually did — this powers gap analysis later.">
+    <SectionShell title="Work experience" subtitle="The real roles you've held. Add what you actually did — this powers gap analysis later." count={items.length}>
       {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : items.map((it) =>
         editing === it.id
           ? <WorkForm key={it.id} initial={it} onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
@@ -149,7 +166,7 @@ export function EducationSection() {
   const { items, loading, reload } = useSection("education");
   const [editing, setEditing] = useState<string | "new" | null>(null);
   return (
-    <SectionShell title="Education" subtitle="Your degrees and qualifications.">
+    <SectionShell title="Education" subtitle="Your degrees and qualifications." count={items.length}>
       {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : items.map((it) =>
         editing === it.id
           ? <EduForm key={it.id} initial={it} onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
@@ -237,7 +254,7 @@ export function LanguageSection() {
   }
 
   return (
-    <SectionShell title="Spoken languages" subtitle="Languages you speak and your level (CEFR, or Native).">
+    <SectionShell title="Spoken languages" subtitle="Languages you speak and your level (CEFR, or Native)." count={items.length}>
       {loading ? null : (
         <div className="flex flex-wrap gap-2">
           {items.map((it) => (
@@ -296,7 +313,7 @@ export function CertificationSection() {
   const [adding, setAdding] = useState(false);
   async function add() { if (!name.trim()) return; setBusy(true); await save("certification", { name, issuer, year }); setName(""); setIssuer(""); setYear(""); setBusy(false); setAdding(false); reload(); }
   return (
-    <SectionShell title="Certifications" subtitle="Professional certifications, if any.">
+    <SectionShell title="Certifications" subtitle="Professional certifications, if any." count={items.length}>
       {loading ? null : items.map((it) => (
         <div key={it.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-3">
           <div className="min-w-0">
@@ -360,7 +377,7 @@ export function SkillsSection() {
   }
 
   return (
-    <SectionShell title="Skills" subtitle="Grouped the way they appear on a CV. These are exported into your downloads.">
+    <SectionShell title="Skills" subtitle="Grouped the way they appear on a CV. These are exported into your downloads." count={items.length}>
       {lang.loading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
         <div className="space-y-4">
           {SKILL_GROUPS.map((g) => {
