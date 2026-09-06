@@ -7,12 +7,13 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
 
-  const [profile, work, education, languages, certifications] = await Promise.all([
+  const [profile, work, education, languages, certifications, skills] = await Promise.all([
     prisma.profile.findUnique({ where: { userId: user.id } }),
     prisma.workExperience.findMany({ where: { userId: user.id }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] }),
     prisma.education.findMany({ where: { userId: user.id }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] }),
     prisma.language.findMany({ where: { userId: user.id }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] }),
     prisma.certification.findMany({ where: { userId: user.id }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] }),
+    prisma.skill.findMany({ where: { userId: user.id }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] }),
   ]);
 
   return NextResponse.json({
@@ -25,6 +26,6 @@ export async function GET() {
       phone: profile?.phone ?? null,
       location: profile?.location ?? null,
     },
-    work, education, languages, certifications,
+    work, education, languages, certifications, skills,
   });
 }

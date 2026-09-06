@@ -48,6 +48,7 @@ model User {
   education     Education[]
   languages     Language[]
   certifications Certification[]
+  skills        Skill[]
 }
 
 model Account {
@@ -361,6 +362,20 @@ model Certification {
   name      String
   issuer    String?
   year      String?  // "YYYY"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A skill on the user's profile, grouped into one of three CV sections:
+/// "language" (programming languages), "technology", or "soft".
+model Skill {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  group     String   // "language" | "technology" | "soft"
   order     Int      @default(0)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

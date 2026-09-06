@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
 import { CountryCitySelect } from "@/components/CountryCitySelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { lookupSkill } from "@/lib/skills/skillKnowledge";
 import { DEGREE_TYPES, MAJORS } from "@/lib/data/education";
 import { LANGUAGES } from "@/lib/data/languages";
 
-type Section = "work" | "education" | "language" | "certification";
+type Section = "work" | "education" | "language" | "certification" | "skill";
 type Item = Record<string, unknown> & { id: string };
 
 const LANG_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2", "Native"];
@@ -317,6 +318,94 @@ export function CertificationSection() {
         </div>
       ) : (
         <button onClick={() => setAdding(true)} className="text-sm font-medium text-accent hover:underline">+ Add certification</button>
+      )}
+    </SectionShell>
+  );
+}
+
+// ── Skills (Programming Languages / Technologies / Soft Skills) ───────────────
+
+const SKILL_GROUPS: { value: string; label: string; hint: string }[] = [
+  { value: "language", label: "Programming Languages", hint: "e.g. JavaScript, TypeScript, Python" },
+  { value: "technology", label: "Technologies", hint: "e.g. React, Prisma, Docker, AWS" },
+  { value: "soft", label: "Soft Skills", hint: "e.g. Ownership, Code Reviews, Mentoring" },
+];
+
+// Map our knowledge-base category to one of the three CV groups, for the
+// "suggested group" helper. Anything language-ish -> language; known tech -> technology.
+function suggestGroup(name: string): string | null {
+  const hit = lookupSkill(name);
+  if (!hit) return null;
+  return hit.category === "Languages" ? "language" : "technology";
+}
+
+export function SkillsSection() {
+  const lang = useSection("skill"); // one fetch, split by group below
+  const items = lang.items as (Item & { group: string })[];
+  const [name, setName] = useState("");
+  const [group, setGroup] = useState("technology");
+  const [busy, setBusy] = useState(false);
+  const [touchedGroup, setTouchedGroup] = useState(false);
+
+  // As the user types a known skill, suggest its group (unless they picked one).
+  const suggestion = !touchedGroup && name.trim() ? suggestGroup(name) : null;
+  const effectiveGroup = suggestion || group;
+
+  async function add() {
+    if (!name.trim()) return;
+    setBusy(true);
+    await save("skill", { name: name.trim(), group: effectiveGroup });
+    setName(""); setTouchedGroup(false); setBusy(false);
+    lang.reload();
+  }
+
+  return (
+    <SectionShell title="Skills" subtitle="Grouped the way they appear on a CV. These are exported into your downloads.">
+      {lang.loading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+        <div className="space-y-4">
+          {SKILL_GROUPS.map((g) => {
+            const groupItems = items.filter((it) => it.group === g.value);
+            return (
+              <div key={g.value}>
+                <p className="text-[13px] font-semibold text-foreground">{g.label}</p>
+                {groupItems.length === 0 ? (
+                  <p className="mt-1 text-[12px] text-muted-foreground">{g.hint}</p>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {groupItems.map((it) => (
+                      <span key={it.id} className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/50 py-1 pl-3 pr-2 text-[13px]">
+                        <span className="text-foreground">{String(it.name)}</span>
+                        <button onClick={() => remove("skill", it.id).then(lang.reload)} className="text-muted-foreground hover:text-danger" aria-label="Remove">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Add a skill (e.g. React)"
+          className={`${fieldBase} flex-1`}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+        />
+        <select
+          value={effectiveGroup}
+          onChange={(e) => { setGroup(e.target.value); setTouchedGroup(true); }}
+          className={fieldBase}
+          title={suggestion ? "Suggested from the skill — change if needed" : undefined}
+        >
+          {SKILL_GROUPS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+        </select>
+        <button onClick={add} disabled={busy || !name.trim()} className={btnPrimary}>Add</button>
+      </div>
+      {suggestion && (
+        <p className="text-[11px] text-muted-foreground">Suggested group: <span className="text-accent">{SKILL_GROUPS.find((g) => g.value === suggestion)?.label}</span> — change the dropdown to override.</p>
       )}
     </SectionShell>
   );

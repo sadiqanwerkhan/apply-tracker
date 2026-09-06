@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/currentUser";
 // One endpoint for all four repeatable profile sections. `section` picks the
 // table; each section has a strict field whitelist so only known fields are
 // written. Everything is scoped to the authenticated user.
-type Section = "work" | "education" | "language" | "certification";
+type Section = "work" | "education" | "language" | "certification" | "skill";
 
 const s = (v: unknown, max = 300) =>
   typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
@@ -32,6 +32,11 @@ function clean(section: Section, body: Record<string, unknown>) {
       return { name: s(body.name) ?? "", level: s(body.level, 20) ?? "" };
     case "certification":
       return { name: s(body.name) ?? "", issuer: s(body.issuer), year: s(body.year, 10) };
+    case "skill":
+      return {
+        name: s(body.name, 60) ?? "",
+        group: ["language", "technology", "soft"].includes(String(body.group)) ? String(body.group) : "technology",
+      };
   }
 }
 
@@ -39,11 +44,12 @@ function delegate(section: Section) {
   if (section === "work") return prisma.workExperience;
   if (section === "education") return prisma.education;
   if (section === "language") return prisma.language;
-  return prisma.certification;
+  if (section === "certification") return prisma.certification;
+  return prisma.skill;
 }
 
 function isSection(v: unknown): v is Section {
-  return v === "work" || v === "education" || v === "language" || v === "certification";
+  return v === "work" || v === "education" || v === "language" || v === "certification" || v === "skill";
 }
 
 // GET ?section=work — list this user's entries for a section.
