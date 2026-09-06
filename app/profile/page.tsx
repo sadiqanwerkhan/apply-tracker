@@ -2,8 +2,7 @@ import Link from "next/link";
 import { auth, signIn } from "@/auth";
 import LandingPage from "@/components/LandingPage";
 import { ProfileForm } from "@/components/ProfileForm";
-import { WorkSection, EducationSection, LanguageSection, CertificationSection } from "@/components/ProfileSections";
-import { SkillClassifier } from "@/components/SkillClassifier";
+import { WorkSection, EducationSection, LanguageSection, CertificationSection, SkillsSection } from "@/components/ProfileSections";
 import { ProfileExport } from "@/components/ProfileExport";
 
 export default async function ProfilePage() {
@@ -32,7 +31,7 @@ export default async function ProfilePage() {
           <EducationSection />
           <LanguageSection />
           <CertificationSection />
-          <SkillClassifier />
+          <SkillsSection />
           <ProfileExport />
         </div>
       </div>
