@@ -8,6 +8,7 @@ import { StageCard } from "../components/application-detail/StageCard";
 import { InsightsView } from "../components/application-detail/InsightsView";
 import { AnalysisView } from "../components/application-detail/AnalysisView";
 import { JobDescriptionCard } from "../components/application-detail/JobDescriptionCard";
+import { GapAnalysis } from "../components/application-detail/GapAnalysis";
 
 export default function ApplicationDetail({ application }: { application: AppT }) {
   const router = useRouter();
@@ -104,6 +105,8 @@ export default function ApplicationDetail({ application }: { application: AppT }
           jobLocation={application.jobLocation}
           jobDescription={application.jobDescription}
         />
+
+        <GapAnalysis applicationId={application.id} hasJobDescription={!!application.jobDescription} />
 
         <h2 className="label-mono mb-3 text-[10px] text-muted-foreground">Interview stages</h2>
 
