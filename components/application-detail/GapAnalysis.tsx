@@ -56,13 +56,23 @@ export function GapAnalysis({ applicationId, hasJobDescription }: { applicationI
           <h2 className="text-sm font-semibold text-foreground">Gap to this role</h2>
           <p className="mt-0.5 text-[12px] text-muted-foreground">How your profile matches this job — and how to close the gap.</p>
         </div>
-        <button
-          onClick={run}
-          disabled={loading || !hasJobDescription}
-          className="shrink-0 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
-        >
-          {loading ? "Analyzing…" : result ? "Re-analyze" : "Analyze"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {result && (
+            <button
+              onClick={() => setOpen((o) => !o)}
+              className="rounded-lg border border-border px-3 py-2 text-[13px] font-medium text-foreground/70 transition-colors hover:bg-secondary"
+            >
+              {open ? "Hide" : "Show"}
+            </button>
+          )}
+          <button
+            onClick={run}
+            disabled={loading || !hasJobDescription}
+            className="rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-accent-foreground shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
+          >
+            {loading ? "Analyzing…" : result ? "Re-analyze" : "Analyze"}
+          </button>
+        </div>
       </div>
 
       {!hasJobDescription && <p className="mt-3 text-[12px] text-muted-foreground">Add a job description above to enable this.</p>}
