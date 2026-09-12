@@ -138,9 +138,9 @@ export const StageCard = memo(function StageCard({ stage, isFirst, isLast, busy,
             <button onClick={() => { setAddingT(false); setTContent(""); }} className="px-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
           </div>
         </div>
-      ) : (
+      ) : stage.transcripts.length === 0 ? (
         <button onClick={() => setAddingT(true)} disabled={busy} className="mt-3 text-sm text-accent hover:underline">+ Add transcript</button>
-      )}
+      ) : null}
     </div>
   );
 });

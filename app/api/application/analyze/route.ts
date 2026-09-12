@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     company: app.company,
     role: app.role,
     outcome,
+    jobDescription: app.jobDescription,
     stages: app.stages.map((s) => ({
       name: s.name,
       transcripts: s.transcripts.map((t) => ({ label: t.label, content: t.content })),

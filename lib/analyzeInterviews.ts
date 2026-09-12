@@ -4,6 +4,7 @@ export type AnalyzeInput = {
   company: string;
   role: string;
   outcome: "rejected" | "positive" | "unknown";
+  jobDescription?: string | null;
   stages: { name: string; transcripts: { label: string | null; content: string }[] }[];
 };
 
@@ -31,6 +32,8 @@ Company: ${input.company}
 Role: ${input.role || "(not specified)"}
 
 Analyze ONLY the conversations in the transcripts below. Base every point strictly on what was actually said. Be honest, specific, and constructive.
+
+${input.jobDescription && input.jobDescription.trim().length > 40 ? `Use the job description below as CONTEXT for what this role required, so you can judge how well the candidate's interview answers matched what the role actually needed. Do not analyze the job description itself — only use it to sharpen your read of the transcripts.\n\n=== JOB DESCRIPTION (context) ===\n${input.jobDescription.slice(0, 2500)}\n=== END JOB DESCRIPTION ===\n` : ""}
 
 IMPORTANT:
 - The transcripts capture the FULL conversation, including what the interviewers said, asked, and reacted to. Use their responses as real signal — e.g. when they corrected the candidate, steered an answer, or stated their own preferences, that is meaningful evidence.
