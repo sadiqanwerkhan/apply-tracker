@@ -220,3 +220,5 @@ A few decisions worth highlighting:
 - A pre-filter before AI classification to further reduce scan time and cost
 - LLM-output evaluation and richer agent observability (step tracing, token/latency metrics)
 - This README file updates every Saturday. Please visit for updates in the application.
+- Open for suggestions, need your support.
+- Please share your interview experiences.
