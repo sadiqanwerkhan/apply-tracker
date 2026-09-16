@@ -222,3 +222,4 @@ A few decisions worth highlighting:
 - This README file updates every Saturday. Please visit for updates in the application.
 - Open for suggestions, need your support.
 - Please share your interview experiences.
+- There is a feedback option in the application before signing in, you can share your feedbacks there, Thank you! 
