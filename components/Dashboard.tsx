@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
-import { Zap, RefreshCw, LogOut, MoreVertical, Bell } from "lucide-react";
+import { useState } from "react";
+import { Zap, RefreshCw, LogOut, Bell, Home, MessageSquare, BarChart3, User, Menu, X } from "lucide-react";
 import { useApplications } from "@/hooks/useApplications";
 import ScanControls from "@/components/ScanControls";
 import FilterPills from "@/components/FilterPills";
@@ -28,24 +28,11 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
   const [reclassifying, setReclassifying] = useState(false);
   const [reclassMsg, setReclassMsg] = useState("");
 
-  // account overflow menu (mobile)
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    if (menuOpen) document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [menuOpen]);
+  const [moreOpen, setMoreOpen] = useState(false); // mobile bottom-bar "More" sheet
 
   async function reclassifyAll() {
     if (!confirm("Re-check all stored emails with the latest classification logic? This won't delete anything.")) return;
 
-    setMenuOpen(false);
     setReclassifying(true);
     setReclassMsg("Re-checking…");
 
@@ -92,7 +79,7 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
       : "No applications match your filters.";
 
   return (
-    <main className="min-h-screen overflow-x-clip bg-background px-3 py-6 sm:px-4 sm:py-10">
+    <main className="min-h-screen overflow-x-clip bg-background px-3 py-6 pb-24 sm:px-4 sm:py-10 md:pb-10">
       <div className="mx-auto max-w-6xl">
         {app.needsReconnect && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-warning/30 bg-warning-muted p-4">
@@ -156,67 +143,9 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
             <ThemeToggle />
           </div>
 
-          {/* MOBILE: theme toggle + overflow menu */}
+          {/* MOBILE: theme toggle only — navigation lives in the fixed bottom bar */}
           <div className="flex shrink-0 items-center gap-2 md:hidden">
             <ThemeToggle />
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-label="Account menu"
-                aria-expanded={menuOpen}
-                className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <MoreVertical className="size-4" />
-              </button>
-
-              {menuOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
-                  <Link
-                    href="/ask"
-                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                  >
-                    Ask
-                  </Link>
-                  <div className="border-t border-border" />
-                  <Link
-                    href="/skills"
-                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                  >
-                    Skills
-                  </Link>
-                  <div className="border-t border-border" />
-                  <Link
-                    href="/profile"
-                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                  >
-                    Profile
-                  </Link>
-                  <Link
-                    href="/settings"
-                    className="block w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                  >
-                    Settings
-                  </Link>
-                  <div className="border-t border-border" />
-                  <button
-                    onClick={reclassifyAll}
-                    disabled={reclassifying}
-                    className="w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
-                  >
-                    {reclassifying ? reclassMsg : "Re-check classifications"}
-                  </button>
-                  <div className="border-t border-border" />
-                  <form action={onSignOut}>
-                    <button
-                      type="submit"
-                      className="w-full px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                    >
-                      Sign out
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
           </div>
         </header>
 
@@ -309,6 +238,68 @@ export default function Dashboard({ userEmail, onSignOut, onReconnect }: Props) 
           )}
         </div>
       </div>
+
+      {/* MOBILE: fixed bottom navigation bar (hidden on desktop) */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/90 backdrop-blur-lg md:hidden">
+        <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 py-1.5">
+          <BottomTab href="/" label="Home" icon={<Home className="size-5" />} />
+          <BottomTab href="/ask" label="Ask" icon={<MessageSquare className="size-5" />} />
+          <BottomTab href="/skills" label="Skills" icon={<BarChart3 className="size-5" />} />
+          <BottomTab href="/profile" label="Profile" icon={<User className="size-5" />} />
+          <button
+            onClick={() => setMoreOpen(true)}
+            className="flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Menu className="size-5" />
+            <span className="text-[10px] font-medium">More</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* MOBILE: "More" sheet with blurred backdrop */}
+      {moreOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+          <button
+            aria-label="Close menu"
+            onClick={() => setMoreOpen(false)}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-popover p-2 pb-6 shadow-2xl">
+            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border" />
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-sm font-semibold text-foreground">More</span>
+              <button onClick={() => setMoreOpen(false)} aria-label="Close" className="text-muted-foreground hover:text-foreground">
+                <X className="size-5" />
+              </button>
+            </div>
+            <Link href="/settings" onClick={() => setMoreOpen(false)} className="block w-full rounded-lg px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary">
+              Settings
+            </Link>
+            <button
+              onClick={() => { setMoreOpen(false); reclassifyAll(); }}
+              disabled={reclassifying}
+              className="w-full rounded-lg px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+            >
+              {reclassifying ? reclassMsg : "Re-check classifications"}
+            </button>
+            <form action={onSignOut}>
+              <button type="submit" className="w-full rounded-lg px-3 py-3 text-left text-sm text-danger transition-colors hover:bg-secondary">
+                Sign out
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+// A single tab in the mobile bottom bar.
+function BottomTab({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
+  return (
+    <Link href={href} className="flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-muted-foreground transition-colors hover:text-accent">
+      {icon}
+      <span className="text-[10px] font-medium">{label}</span>
+    </Link>
   );
 }
