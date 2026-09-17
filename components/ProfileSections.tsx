@@ -364,6 +364,12 @@ export function SkillsSection() {
   const [busy, setBusy] = useState(false);
   const [touchedGroup, setTouchedGroup] = useState(false);
 
+  // Auto-pull: skills detected in the user's work-experience descriptions that
+  // they have not added yet.
+  const [finding, setFinding] = useState(false);
+  const [found, setFound] = useState<{ name: string; group: string }[] | null>(null);
+  const [findMsg, setFindMsg] = useState<string | null>(null);
+
   // As the user types a known skill, suggest its group (unless they picked one).
   const suggestion = !touchedGroup && name.trim() ? suggestGroup(name) : null;
   const effectiveGroup = suggestion || group;
@@ -374,6 +380,37 @@ export function SkillsSection() {
     await save("skill", { name: name.trim(), group: effectiveGroup });
     setName(""); setTouchedGroup(false); setBusy(false);
     lang.reload();
+  }
+
+  async function findFromExperience() {
+    setFinding(true); setFindMsg(null); setFound(null);
+    try {
+      const res = await fetch("/api/profile/extract-skills");
+      const d = await res.json();
+      if (Array.isArray(d.suggestions) && d.suggestions.length > 0) {
+        setFound(d.suggestions);
+      } else {
+        setFindMsg(d.reason === "no_descriptions"
+          ? "Add descriptions to your work experience first, then try again."
+          : "No new skills found in your experience — you have added them all.");
+      }
+    } catch {
+      setFindMsg("Something went wrong. Please try again.");
+    } finally {
+      setFinding(false);
+    }
+  }
+
+  async function addSuggested(sk: { name: string; group: string }) {
+    await save("skill", { name: sk.name, group: sk.group });
+    setFound((prev) => (prev ? prev.filter((s) => s.name !== sk.name) : prev));
+    lang.reload();
+  }
+
+  async function addAllSuggested() {
+    if (!found) return;
+    for (const sk of found) await save("skill", { name: sk.name, group: sk.group });
+    setFound([]); lang.reload();
   }
 
   return (
@@ -403,7 +440,33 @@ export function SkillsSection() {
         </div>
       )}
 
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+      {/* Auto-pull from work experience */}
+      <div className="mt-3 rounded-lg border border-border/60 bg-secondary/20 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[12px] text-muted-foreground">Pull skills you mentioned in your work experience.</p>
+          <button onClick={findFromExperience} disabled={finding} className="shrink-0 rounded-lg border border-border bg-card px-3 py-1.5 text-[12px] font-medium text-foreground/80 transition-colors hover:bg-secondary disabled:opacity-60">
+            {finding ? "Scanning…" : "Find from experience"}
+          </button>
+        </div>
+        {findMsg && <p className="mt-2 text-[12px] text-muted-foreground">{findMsg}</p>}
+        {found && found.length > 0 && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[12px] font-medium text-foreground">Found {found.length} — tap to add:</p>
+              <button onClick={addAllSuggested} className="text-[12px] font-medium text-accent hover:underline">Add all</button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {found.map((sk) => (
+                <button key={sk.name} onClick={() => addSuggested(sk)} className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/[0.06] px-3 py-1 text-[13px] text-accent transition-colors hover:bg-accent/15">
+                  + {sk.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
