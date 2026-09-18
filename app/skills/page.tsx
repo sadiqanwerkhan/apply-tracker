@@ -36,7 +36,7 @@ export default async function SkillsPage() {
   const totalSignals = stats.reduce((n, s) => n + s.total, 0);
 
   return (
-    <main className="min-h-screen bg-background px-3 py-6 sm:px-4 sm:py-10">
+    <main className="min-h-screen bg-background px-3 py-6 pb-24 sm:px-4 sm:py-10 md:pb-10">
       <div className="mx-auto max-w-2xl">
         <Link href="/" className="text-sm text-accent hover:underline">← Back to applications</Link>
 
