@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Home, MessageSquare, BarChart3, User, Menu, X } from "lucide-react";
+import { Home, MessageSquare, BarChart3, User, Menu, X, Settings } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 // Fixed bottom navigation for mobile, shared across every page via the root
@@ -22,12 +22,12 @@ export function MobileBottomNav() {
     <>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/90 backdrop-blur-lg md:hidden">
         <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 py-1.5">
-          {/* Home only shows when not already home; otherwise its slot stays empty
-              so the other tabs keep their spacing. */}
-          {!isHome ? (
-            <Tab href="/" label="Home" active={active("/")} icon={<Home className="size-5" />} />
+          {/* First slot swaps: Home when you are away from home, Settings when you
+              are already home — so the bar is always full and useful. */}
+          {isHome ? (
+            <Tab href="/settings" label="Settings" active={active("/settings")} icon={<Settings className="size-5" />} />
           ) : (
-            <div className="flex-1" />
+            <Tab href="/" label="Home" active={active("/")} icon={<Home className="size-5" />} />
           )}
           <Tab href="/ask" label="Ask" active={active("/ask")} icon={<MessageSquare className="size-5" />} />
           <Tab href="/skills" label="Skills" active={active("/skills")} icon={<BarChart3 className="size-5" />} />
@@ -53,9 +53,11 @@ export function MobileBottomNav() {
                 <X className="size-5" />
               </button>
             </div>
-            <Link href="/settings" onClick={() => setMoreOpen(false)} className="block w-full rounded-lg px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary">
-              Settings
-            </Link>
+            {!isHome && (
+              <Link href="/settings" onClick={() => setMoreOpen(false)} className="block w-full rounded-lg px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary">
+                Settings
+              </Link>
+            )}
             <button
               onClick={() => { setMoreOpen(false); signOut({ callbackUrl: "/" }); }}
               className="w-full rounded-lg px-3 py-3 text-left text-sm text-danger transition-colors hover:bg-secondary"
