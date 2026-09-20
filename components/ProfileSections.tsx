@@ -64,7 +64,7 @@ async function remove(section: Section, id: string) {
 }
 
 function SectionShell({ title, subtitle, children, count }: { title: string; subtitle?: string; children: React.ReactNode; count?: number }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false); // sections start collapsed; user expands them
   return (
     <div className="rounded-xl border border-border bg-card">
       <button

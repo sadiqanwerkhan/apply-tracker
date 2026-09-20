@@ -293,6 +293,7 @@ model Profile {
   lastName     String?
   contactEmail String?  // optional alternate email; login email is used if blank
   age          Int?
+  dateOfBirth  String?  // "YYYY-MM-DD"; age is computed from this at display time
   phone        String?
   location     String?  // free text, e.g. "Berlin, Germany" or "Remote"
   updatedAt    DateTime @updatedAt

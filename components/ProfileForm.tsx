@@ -5,11 +5,23 @@ import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
 import { CountryCitySelect } from "@/components/CountryCitySelect";
 import { DIAL_CODES } from "@/lib/data/dialCodes";
 
+function computeAge(dobStr: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dobStr)) return null;
+  const d = new Date(dobStr + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+  return a >= 0 && a <= 120 ? a : null;
+}
+
 type Profile = {
   firstName: string | null;
   lastName: string | null;
   contactEmail: string | null;
   age: number | null;
+  dateOfBirth: string | null;
   phone: string | null;
   location: string | null;
 };
@@ -47,7 +59,7 @@ export function ProfileForm() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
-  const [age, setAge] = useState("");
+  const [dob, setDob] = useState("");
   const [phoneCode, setPhoneCode] = useState("+49");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [country, setCountry] = useState("");
@@ -63,7 +75,7 @@ export function ProfileForm() {
           setFirstName(p.firstName || "");
           setLastName(p.lastName || "");
           setContactEmail(p.contactEmail || "");
-          setAge(p.age != null ? String(p.age) : "");
+          setDob(p.dateOfBirth || "");
           if (p.phone) { const s = splitPhone(p.phone); setPhoneCode(s.code); setPhoneNumber(s.number); }
           if (p.location) { const s = splitLocation(p.location); setCountry(s.country); setCity(s.city); }
           setHasProfile(true);
@@ -94,7 +106,7 @@ export function ProfileForm() {
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName, lastName, contactEmail, age, phone, location }),
+        body: JSON.stringify({ firstName, lastName, contactEmail, dateOfBirth: dob, phone, location }),
       });
       if (res.ok) { setHasProfile(true); setEditing(false); }
     } finally {
@@ -129,7 +141,7 @@ export function ProfileForm() {
                   <Row label="Name" value={fullName} />
                   <Row label="Login email" value={loginEmail} />
                   <Row label="Contact email" value={contactEmail} />
-                  <Row label="Age" value={age} />
+                  <Row label="Age" value={computeAge(dob) !== null ? String(computeAge(dob)) : ""} />
                   <Row label="Phone" value={phoneText} />
                   <Row label="Location" value={locationText} />
                 </div>
@@ -160,8 +172,9 @@ export function ProfileForm() {
                   <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className={fieldBase} placeholder="you@example.com" />
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[13px] font-medium text-foreground/80">Age <span className="font-normal text-muted-foreground">(optional)</span></span>
-                  <input type="number" min={14} max={100} value={age} onChange={(e) => setAge(e.target.value)} className={fieldBase} placeholder="28" />
+                  <span className="text-[13px] font-medium text-foreground/80">Date of birth <span className="font-normal text-muted-foreground">(optional)</span></span>
+                  <input type="date" value={dob} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDob(e.target.value)} className={fieldBase} />
+                  {computeAge(dob) !== null && <span className="text-[11px] text-muted-foreground">Age: {computeAge(dob)}</span>}
                 </label>
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[13px] font-medium text-foreground/80">Phone <span className="font-normal text-muted-foreground">(optional)</span></span>

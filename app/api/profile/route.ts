@@ -20,19 +20,28 @@ export async function PUT(req: NextRequest) {
   if (!body) return NextResponse.json({ error: "bad_request" }, { status: 400 });
 
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null);
-  // age: accept a positive integer within a sane range, else null.
+
+  // Date of birth ("YYYY-MM-DD"), validated. Age is COMPUTED from it and stored
+  // too, so old readers still work — but the birth date is the source of truth.
+  let dateOfBirth: string | null = null;
   let age: number | null = null;
-  if (typeof body.age === "number" && Number.isFinite(body.age)) age = Math.trunc(body.age);
-  else if (typeof body.age === "string" && body.age.trim()) {
-    const n = parseInt(body.age, 10);
-    if (Number.isFinite(n)) age = n;
+  const dob = str(body.dateOfBirth);
+  if (dob && /^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    const d = new Date(dob + "T00:00:00Z");
+    if (!isNaN(d.getTime())) {
+      const now = new Date();
+      let a = now.getUTCFullYear() - d.getUTCFullYear();
+      const m = now.getUTCMonth() - d.getUTCMonth();
+      if (m < 0 || (m === 0 && now.getUTCDate() < d.getUTCDate())) a--;
+      if (a >= 14 && a <= 100) { dateOfBirth = dob; age = a; }
+    }
   }
-  if (age !== null && (age < 14 || age > 100)) age = null;
 
   const data = {
     firstName: str(body.firstName),
     lastName: str(body.lastName),
     contactEmail: str(body.contactEmail),
+    dateOfBirth,
     age,
     phone: str(body.phone),
     location: str(body.location),
