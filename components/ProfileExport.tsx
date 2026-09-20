@@ -27,7 +27,7 @@ export function ProfileExport() {
 
   const btn = "rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-60";
 
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
     <div className="rounded-xl border border-border bg-card">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 p-4 text-left sm:p-6">
