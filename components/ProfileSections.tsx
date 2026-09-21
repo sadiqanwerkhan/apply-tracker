@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
 import { CountryCitySelect } from "@/components/CountryCitySelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -35,17 +36,19 @@ function dateRange(it: Item): string {
 }
 
 function useSection(section: Section) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
-  const load = useCallback(() => {
-    fetch(`/api/profile/sections?section=${section}`)
-      .then((r) => r.json())
-      .then((d) => { if (Array.isArray(d.items)) setItems(d.items); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [section]);
-  useEffect(() => { load(); }, [load]);
-  return { items, loading, reload: load };
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<Item[]>({
+    queryKey: ["profile-section", section],
+    queryFn: async () => {
+      const res = await fetch(`/api/profile/sections?section=${section}`);
+      const d = await res.json();
+      return Array.isArray(d.items) ? d.items : [];
+    },
+    staleTime: 60_000,
+  });
+  // reload = invalidate this section's cache so it refetches (used after add/edit/delete).
+  const reload = () => qc.invalidateQueries({ queryKey: ["profile-section", section] });
+  return { items: data ?? [], loading: isLoading, reload };
 }
 
 async function save(section: Section, data: Record<string, unknown>, id?: string) {
