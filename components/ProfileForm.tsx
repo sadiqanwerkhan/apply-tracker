@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fieldBase, btnPrimary } from "@/components/application-detail/shared";
 import { CountryCitySelect } from "@/components/CountryCitySelect";
 import { DIAL_CODES } from "@/lib/data/dialCodes";
@@ -65,28 +66,34 @@ export function ProfileForm() {
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
 
+  const { data: profileData } = useQuery<{ loginEmail: string; profile: Profile | null }>({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/profile");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+
+  // Sync the cached profile into the editable form state once it arrives.
   useEffect(() => {
-    fetch("/api/profile")
-      .then((r) => r.json())
-      .then((d) => {
-        setLoginEmail(d.loginEmail || "");
-        const p: Profile | null = d.profile;
-        if (p && (p.firstName || p.lastName || p.location)) {
-          setFirstName(p.firstName || "");
-          setLastName(p.lastName || "");
-          setContactEmail(p.contactEmail || "");
-          setDob(p.dateOfBirth || "");
-          if (p.phone) { const s = splitPhone(p.phone); setPhoneCode(s.code); setPhoneNumber(s.number); }
-          if (p.location) { const s = splitLocation(p.location); setCountry(s.country); setCity(s.city); }
-          setHasProfile(true);
-          setEditing(false);   // show saved view
-        } else {
-          setEditing(true);    // nothing saved yet → start in edit mode
-        }
-      })
-      .catch(() => setEditing(true))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!profileData) return;
+    setLoginEmail(profileData.loginEmail || "");
+    const p = profileData.profile;
+    if (p && (p.firstName || p.lastName || p.location)) {
+      setFirstName(p.firstName || "");
+      setLastName(p.lastName || "");
+      setContactEmail(p.contactEmail || "");
+      setDob(p.dateOfBirth || "");
+      if (p.phone) { const s = splitPhone(p.phone); setPhoneCode(s.code); setPhoneNumber(s.number); }
+      if (p.location) { const s = splitLocation(p.location); setCountry(s.country); setCity(s.city); }
+      setHasProfile(true);
+      setEditing(false);
+    } else {
+      setEditing(true);
+    }
+    setLoading(false);
+  }, [profileData]);
 
   function validate(): boolean {
     const e: Record<string, string> = {};
