@@ -7,6 +7,7 @@ import { Row, StatusFilter } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 const SEEN_KEY = "appsSeenActivity";
+const SCAN_JOB_KEY = "activeScanJobId"; // survives navigation so a running scan can be resumed
 const APPS_KEY = ["applications"] as const;
 
 function isoDate(d: Date) {
@@ -180,6 +181,35 @@ export function useApplications() {
   // ── Scan (React Query mutation) ──────────────────────────────────────────
   // Starts the job and polls to completion. Rows are written into the cache as
   // they arrive so the list updates live; progress/error handling is unchanged.
+  // Poll a running job to completion. Shared by a fresh scan and by resume-on-mount.
+  // The server job keeps running regardless of the browser, so this just watches it.
+  async function pollJob(jobId: string) {
+    let guard = 0;
+    while (guard < 600) {
+      guard++;
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const withRows = guard % 5 === 0;
+      const s = await fetch(`/api/scan/status?jobId=${jobId}${withRows ? "&rows=1" : ""}`);
+      if (!s.ok) continue;
+      const j = await s.json();
+
+      if (j.rows) setRows(j.rows);
+      setProgress({ processed: j.processed || 0, remaining: j.remaining || 0 });
+      if (j.truncated) {
+        setError("Reached the 1000 email limit — narrow your date range to see everything.");
+      }
+
+      if (j.status === "complete") { try { localStorage.removeItem(SCAN_JOB_KEY); } catch {} return; }
+      if (j.status === "failed") {
+        try { localStorage.removeItem(SCAN_JOB_KEY); } catch {}
+        if (j.error === "reconnect_required") throw new Error("reconnect_required");
+        throw new Error(j.error || "scan_failed");
+      }
+    }
+    try { localStorage.removeItem(SCAN_JOB_KEY); } catch {}
+  }
+
   const scanMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/scan", {
@@ -194,34 +224,9 @@ export function useApplications() {
       }
 
       const jobId: string = data.jobId;
-      let guard = 0;
-
-      // Poll until the job finishes. The browser can close — the job keeps running.
-      while (guard < 600) {
-        guard++;
-        await new Promise((r) => setTimeout(r, 2000));
-
-        const withRows = guard % 5 === 0;
-        const s = await fetch(`/api/scan/status?jobId=${jobId}${withRows ? "&rows=1" : ""}`);
-        // Only skip on a genuine HTTP failure of the status endpoint itself.
-        // A FAILED job carries an error field — that's the signal we act on below.
-        if (!s.ok) continue;
-        const j = await s.json();
-
-        if (j.rows) setRows(j.rows);
-        setProgress({ processed: j.processed || 0, remaining: j.remaining || 0 });
-        if (j.truncated) {
-          setError("Reached the 1000 email limit — narrow your date range to see everything.");
-        }
-
-        if (j.status === "complete") return;
-        if (j.status === "failed") {
-          if (j.error === "reconnect_required") {
-            throw new Error("reconnect_required");
-          }
-          throw new Error(j.error || "scan_failed");
-        }
-      }
+      // Remember the running job so we can resume watching it after navigation.
+      try { localStorage.setItem(SCAN_JOB_KEY, jobId); } catch {}
+      await pollJob(jobId);
     },
     onMutate: () => {
       setError("");
@@ -247,7 +252,29 @@ export function useApplications() {
     },
   });
 
-  const scanning = scanMutation.isPending;
+  // Resume watching a scan that was still running when the user navigated away.
+  const resumeMutation = useMutation({
+    mutationFn: async (jobId: string) => { await pollJob(jobId); },
+    onError: (err: Error) => {
+      if (err.message === "reconnect_required") { setNeedsReconnect(true); setError(""); }
+      // A stale/expired job id just ends quietly; don't alarm the user.
+    },
+    onSettled: () => { setProgress(null); },
+  });
+
+  // On mount, if a scan job was saved and is not finished, reconnect to it.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    let jobId: string | null = null;
+    try { jobId = localStorage.getItem(SCAN_JOB_KEY); } catch {}
+    if (jobId) resumeMutation.mutate(jobId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The UI shows "scanning" whether it's a fresh scan or a resumed one.
+  const scanning = scanMutation.isPending || resumeMutation.isPending;
 
   function runScan() {
     scanMutation.mutate();
