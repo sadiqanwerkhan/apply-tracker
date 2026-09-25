@@ -6,7 +6,16 @@ import type { AnalysisSection, Readiness, ParsedAnalysis } from "./shared";
 export function parseAnalysis(raw: string): ParsedAnalysis | null {
   try {
     const p = JSON.parse(raw);
-    if (p && Array.isArray(p.sections)) return p as ParsedAnalysis;
+    // Accept the result if it is a JSON object with EITHER a sections array or a
+    // readiness object. Some analyses come back with readiness only (no sections)
+    // — those are still valid and must render, not fall through to raw JSON.
+    if (p && typeof p === "object") {
+      const hasSections = Array.isArray(p.sections);
+      const hasReadiness = p.readiness && typeof p.readiness === "object" && p.readiness.band;
+      if (hasSections || hasReadiness) {
+        return { ...p, sections: hasSections ? p.sections : [] } as ParsedAnalysis;
+      }
+    }
   } catch {
     // not JSON
   }
@@ -112,6 +121,11 @@ export function AnalysisView({ raw }: { raw: string }) {
           <CollapsibleSection key={s.type} section={s} defaultOpen={s.type === "actions"} />
         ))}
       </div>
+      {sections.length === 0 && !parsed.headline && (
+        <p className="text-sm text-muted-foreground">
+          No detailed breakdown was produced this time — the transcript may be too short. Try adding more transcript detail and re-analyzing.
+        </p>
+      )}
     </div>
   );
 }

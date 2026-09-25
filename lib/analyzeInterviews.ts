@@ -73,7 +73,17 @@ ${blocks.join("\n\n---\n\n")}`;
   const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   try {
     const parsed = JSON.parse(clean);
-    if (parsed && Array.isArray(parsed.sections)) return JSON.stringify(parsed);
+    // Accept the result if it has a sections array OR a readiness object. Some
+    // analyses come back with readiness only — normalize sections to [] and keep
+    // it as clean JSON rather than falling back to a raw string.
+    if (parsed && typeof parsed === "object") {
+      const hasSections = Array.isArray(parsed.sections);
+      const hasReadiness = parsed.readiness && typeof parsed.readiness === "object" && parsed.readiness.band;
+      if (hasSections || hasReadiness) {
+        if (!hasSections) parsed.sections = [];
+        return JSON.stringify(parsed);
+      }
+    }
   } catch {
     // not JSON — fall through to raw text
   }
