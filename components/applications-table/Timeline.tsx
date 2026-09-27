@@ -128,17 +128,37 @@ export function Timeline({ row, allRows, now }: { row: Row; allRows: Row[]; now:
           <p className="label-mono mb-4 text-[10px] text-muted-foreground">Application timeline</p>
           {row.timeline && row.timeline.length > 0 ? (
             <ol className="relative ml-2 border-l-2 border-border">
-              {row.timeline.map((e, idx) => (
-                <li key={idx} className="mb-5 ml-6 last:mb-0">
-                  <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-card ${dotClasses(e.stage)}`} />
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="font-semibold text-foreground">{e.label || STAGE_LABELS[e.stage] || "Update"}</span>
-                    <span className="tnum text-xs text-muted-foreground">{e.date}</span>
-                  </div>
-                  {e.subject && <p className="mt-1 break-words text-sm text-muted-foreground">{e.subject}</p>}
-                  {e.reason && <p className="mt-1.5 break-words text-sm text-danger"><span className="font-medium">Why:</span> {e.reason}</p>}
-                </li>
-              ))}
+              {(() => {
+                // Interview-type stages get numbered (Interview 1, 2, ...). Everything
+                // else is treated as an info/update entry, not an interview step.
+                const INTERVIEW_STAGES = new Set(["screening", "assessment", "interview"]);
+                let interviewNo = 0;
+                return row.timeline.map((e, idx) => {
+                  const isInterview = INTERVIEW_STAGES.has(e.stage);
+                  if (isInterview) interviewNo++;
+                  const isInfo = e.stage === "update" || e.stage === "applied";
+                  // A named interview stage keeps its custom label; otherwise number it.
+                  const heading = e.label
+                    ? e.label
+                    : isInterview
+                      ? `Interview ${interviewNo}`
+                      : STAGE_LABELS[e.stage] || "Update";
+                  return (
+                    <li key={idx} className="mb-5 ml-6 last:mb-0">
+                      <span className={`absolute -left-[9px] mt-1 h-4 w-4 rounded-full border-2 border-card ${dotClasses(e.stage)}`} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-foreground">{heading}</span>
+                        {isInfo && (
+                          <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Info</span>
+                        )}
+                        <span className="tnum text-xs text-muted-foreground">{e.date}</span>
+                      </div>
+                      {e.subject && <p className="mt-1 break-words text-sm text-muted-foreground">{e.subject}</p>}
+                      {e.reason && <p className="mt-1.5 break-words text-sm text-danger"><span className="font-medium">Why:</span> {e.reason}</p>}
+                    </li>
+                  );
+                });
+              })()}
             </ol>
           ) : (
             <p className="text-sm text-muted-foreground">No timeline details available.</p>
