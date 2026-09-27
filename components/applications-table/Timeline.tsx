@@ -129,19 +129,18 @@ export function Timeline({ row, allRows, now }: { row: Row; allRows: Row[]; now:
           {row.timeline && row.timeline.length > 0 ? (
             <ol className="relative ml-2 border-l-2 border-border">
               {(() => {
-                // Interview-type stages get numbered (Interview 1, 2, ...). Everything
-                // else is treated as an info/update entry, not an interview step.
+                // Interview-type stages get numbered "Stage 1, 2, ...". Everything else
+                // is treated as an info/update entry, not a stage.
                 const INTERVIEW_STAGES = new Set(["screening", "assessment", "interview"]);
-                let interviewNo = 0;
+                let stageNo = 0;
                 return row.timeline.map((e, idx) => {
-                  const isInterview = INTERVIEW_STAGES.has(e.stage);
-                  if (isInterview) interviewNo++;
+                  const isStage = INTERVIEW_STAGES.has(e.stage);
+                  if (isStage) stageNo++;
                   const isInfo = e.stage === "update" || e.stage === "applied";
-                  // A named interview stage keeps its custom label; otherwise number it.
                   const heading = e.label
                     ? e.label
-                    : isInterview
-                      ? `Interview ${interviewNo}`
+                    : isStage
+                      ? `Stage ${stageNo}`
                       : STAGE_LABELS[e.stage] || "Update";
                   return (
                     <li key={idx} className="mb-5 ml-6 last:mb-0">
