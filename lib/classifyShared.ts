@@ -62,7 +62,7 @@ export const SYSTEM_INSTRUCTIONS = `You are analyzing emails from a job seeker's
     - "interview": ONLY if the email explicitly invites the candidate to, or schedules, a technical, onsite, or final-round interview.
     - "offer": ONLY if a job offer is actually being extended.
     - "rejected": the company declined the application or is not moving forward with the candidate.
-    - "update": a genuine application-related email that does not fit any category above.
+    - "update": a genuine application-related email that does not fit any category above. IMPORTANT: an email that only shares information (details about the team, the company, the role, general next-steps, a thank-you, or an acknowledgement) with NO specific interview, call, or assessment actually being scheduled or requested is an "update", NOT an "interview" or "screening". Only use interview/screening/assessment when a concrete session is being scheduled or requested.
 - "reason": ONLY when stage is "rejected", a very short one-sentence summary of WHY the candidate was rejected, based strictly on what the email actually says. If the rejection gives no specific reason, use "No specific reason given". For every non-rejected email, use null.
 CRITICAL — distinguish an APPLICATION from RECRUITER OUTREACH:
 - If a recruiter is PITCHING a job to the candidate (unsolicited: "I have an opportunity", "could this be a next step for you", "our partner is hiring", contains an unsubscribe link, or comes via a sourcing platform), set "promotional": true. The candidate did NOT apply.

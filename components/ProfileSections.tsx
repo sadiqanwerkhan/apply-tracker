@@ -493,3 +493,4 @@ export function SkillsSection() {
     </SectionShell>
   );
 }
+  
