@@ -219,6 +219,8 @@ A few decisions worth highlighting:
 - In-app Gmail reconnect to handle token expiry
 - A pre-filter before AI classification to further reduce scan time and cost
 - LLM-output evaluation and richer agent observability (step tracing, token/latency metrics)
+- There is a profile section in the app to put the honest work experience.
+- The profile compares the gap between candidate's actual experience and job description.
 - This README file updates every Saturday. Please visit for updates in the application.
 - Open for suggestions, need your support.
 - Please share your interview experiences.
