@@ -321,15 +321,24 @@ export async function runScanChunk(
   if (finals.length > 0) {
     const existingApps = await prisma.application.findMany({
       where: { userId },
-      select: { id: true, company: true, role: true, emails: { select: { date: true } } },
+      select: { id: true, company: true, role: true, manualStatus: true, emails: { select: { date: true, status: true } } },
     });
 
-    const apps: AppRef[] = existingApps.map((a) => ({
-      id: a.id,
-      ck: normalizeCompanyKey(a.company),
-      rk: normalizeRoleKey(a.role),
-      dates: a.emails.map((e) => e.date.getTime()),
-    }));
+    const apps: AppRef[] = existingApps.map((a) => {
+      // "open" = not already settled. Settled if a manual outcome of Rejected was
+      // recorded, or any email on it was classified Rejected. Used only to avoid
+      // attaching a stray role-less email to an already-rejected application when
+      // the same company has multiple applications.
+      const emailRejected = a.emails.some((e) => e.status === "Rejected");
+      const manualRejected = a.manualStatus === "Rejected";
+      return {
+        id: a.id,
+        ck: normalizeCompanyKey(a.company),
+        rk: normalizeRoleKey(a.role),
+        open: !(emailRejected || manualRejected),
+        dates: a.emails.map((e) => e.date.getTime()),
+      };
+    });
 
     const rowsToCreate: {
       id: string; userId: string; applicationId: string; companyKey: string; company: string;
