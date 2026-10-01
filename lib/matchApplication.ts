@@ -21,6 +21,8 @@ export type AppRef = {
   id: string;
   /** normalized company key */
   ck: string;
+  /** whether this application is still open (not rejected/offer); optional */
+  open?: boolean;
   /** normalized role key ("" = role-less placeholder) */
   rk: string;
   /** epoch ms of this app's known emails (used for nearest-by-date) */
@@ -45,11 +47,23 @@ export function matchApplication(
     if (exact) return { kind: "attach", appId: exact.id };
   }
 
-  // 2) NO role on this email -> attach to the company's nearest application by date
+  // 2) NO role on this email -> attach to a company application.
   if (!rk && sameCompany.length > 0) {
-    let best = sameCompany[0];
+    // Exactly one application at this company: unambiguous, attach it.
+    if (sameCompany.length === 1) return { kind: "attach", appId: sameCompany[0].id };
+
+    // Several applications at the same company and no role to tell them apart.
+    // A blind date guess can attach (e.g.) a rejection to the wrong role. Narrow
+    // to applications that are NOT already decided (rejected/offer) when that info
+    // is available, so a late stray email does not overwrite a settled outcome.
+    const candidates = sameCompany.some((a) => a.open !== undefined)
+      ? sameCompany.filter((a) => a.open !== false)
+      : sameCompany;
+    const pool = candidates.length > 0 ? candidates : sameCompany;
+
+    let best = pool[0];
     let bestDist = Infinity;
-    for (const a of sameCompany) {
+    for (const a of pool) {
       const d = a.dates.length
         ? Math.min(...a.dates.map((t) => Math.abs(t - date)))
         : Infinity;
